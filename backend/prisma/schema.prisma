@@ -1,0 +1,292 @@
+// ─────────────────────────────────────────────────────────────
+//  روقان (Rawaqan) — Prisma schema (Task 15: Database Design)
+//  PostgreSQL · normalized · indexed · cascade rules
+// ─────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────
+
+enum AdminRole {
+  SUPER_ADMIN
+  MANAGER
+  STAFF
+}
+
+enum SpiceLevel {
+  NONE
+  MILD
+  MEDIUM
+  HOT
+}
+
+enum ActivityAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+}
+
+enum Weekday {
+  SUNDAY
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+}
+
+enum AnalyticsEventType {
+  PAGE_VIEW
+  ITEM_VIEW
+  CATEGORY_VIEW
+  QR_SCAN
+}
+
+// ─── Auth / Admins ───────────────────────────────────────────
+
+model Admin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  role         AdminRole @default(STAFF)
+  isActive     Boolean  @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  refreshTokens RefreshToken[]
+  activityLogs  ActivityLog[]
+
+  @@index([isActive])
+  @@map("admins")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  adminId   String   @map("admin_id")
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  userAgent String?  @map("user_agent")
+  ip        String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  admin Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+// ─── Restaurant settings (singleton row) ─────────────────────
+
+model RestaurantSettings {
+  id             String   @id @default(cuid())
+  name           String   @default("روقان")
+  nameEn         String?  @map("name_en")
+  tagline        String?
+  taglineEn      String?  @map("tagline_en")
+  description    String?
+  logoUrl        String?  @map("logo_url")
+  coverUrl       String?  @map("cover_url")
+  phone          String?
+  whatsapp       String?
+  facebook       String?
+  instagram      String?
+  tiktok         String?
+  googleMapsUrl  String?  @map("google_maps_url")
+  addressLine    String?  @map("address_line")
+  latitude       Float?
+  longitude      Float?
+  currency       String   @default("EGP")
+  footerText     String?  @map("footer_text")
+  // Theme color overrides (fall back to design tokens when null)
+  colorPrimary   String?  @map("color_primary")
+  colorAccent    String?  @map("color_accent")
+  colorBackground String? @map("color_background")
+  isOpenOverride Boolean? @map("is_open_override")
+  // Site modes (Task 22)
+  maintenanceMode    Boolean @default(false) @map("maintenance_mode")
+  maintenanceMessage String? @map("maintenance_message")
+  comingSoonMode     Boolean @default(false) @map("coming_soon_mode")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  openingHours OpeningHour[]
+
+  @@map("restaurant_settings")
+}
+
+model OpeningHour {
+  id         String   @id @default(cuid())
+  settingsId String   @map("settings_id")
+  weekday    Weekday
+  isClosed   Boolean  @default(false) @map("is_closed")
+  opensAt    String?  @map("opens_at") // "HH:mm"
+  closesAt   String?  @map("closes_at") // "HH:mm"
+
+  settings RestaurantSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+
+  @@unique([settingsId, weekday])
+  @@map("opening_hours")
+}
+
+// ─── Menu domain ─────────────────────────────────────────────
+
+model Category {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  nameEn      String?  @map("name_en")
+  description String?
+  imageUrl    String?  @map("image_url")
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  items MenuItem[]
+
+  @@index([isActive, sortOrder])
+  @@map("categories")
+}
+
+model MenuItem {
+  id             String   @id @default(cuid())
+  categoryId     String   @map("category_id")
+  slug           String   @unique
+  name           String
+  nameEn         String?  @map("name_en")
+  description    String?
+  descriptionEn  String?  @map("description_en")
+  ingredients    String?
+  price          Decimal  @db.Decimal(10, 2)
+  discountPrice  Decimal? @map("discount_price") @db.Decimal(10, 2)
+  calories       Int?
+  allergens      String?  // comma-separated / freeform
+  spiceLevel     SpiceLevel @default(NONE) @map("spice_level")
+  isAvailable    Boolean  @default(true) @map("is_available")
+  isFeatured     Boolean  @default(false) @map("is_featured")
+  isBestSeller   Boolean  @default(false) @map("is_best_seller")
+  isNew          Boolean  @default(false) @map("is_new")
+  isVegetarian   Boolean  @default(false) @map("is_vegetarian")
+  isChefRecommendation Boolean @default(false) @map("is_chef_recommendation")
+  // Soft-hide: archived items are excluded from public + default admin lists,
+  // but retained and restorable (Task 22: hide without deleting).
+  isArchived     Boolean  @default(false) @map("is_archived")
+  // Scheduling windows (Task 22). Null = no schedule (respect the boolean flag).
+  featuredFrom   DateTime? @map("featured_from")
+  featuredUntil  DateTime? @map("featured_until")
+  promoFrom      DateTime? @map("promo_from")
+  promoUntil     DateTime? @map("promo_until")
+  viewCount      Int      @default(0) @map("view_count")
+  sortOrder      Int      @default(0) @map("sort_order")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  category Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  images   ItemImage[]
+  tags     ItemTag[]
+
+  @@index([categoryId, sortOrder])
+  @@index([isAvailable])
+  @@index([isFeatured])
+  @@index([isBestSeller])
+  @@index([isArchived])
+  @@map("menu_items")
+}
+
+model ItemImage {
+  id         String   @id @default(cuid())
+  itemId     String   @map("item_id")
+  url        String
+  publicId   String?  @map("public_id") // Cloudinary public_id for deletion
+  alt        String?
+  sortOrder  Int      @default(0) @map("sort_order")
+  isPrimary  Boolean  @default(false) @map("is_primary")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  item MenuItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId, sortOrder])
+  @@map("item_images")
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  label     String
+  labelEn   String?  @map("label_en")
+  color     String?  // optional hex override for the chip
+  createdAt DateTime @default(now()) @map("created_at")
+
+  items ItemTag[]
+
+  @@map("tags")
+}
+
+// Explicit M:N join so we can add attributes later (e.g. sortOrder)
+model ItemTag {
+  itemId String @map("item_id")
+  tagId  String @map("tag_id")
+
+  item MenuItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  tag  Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, tagId])
+  @@index([tagId])
+  @@map("item_tags")
+}
+
+// ─── Audit ───────────────────────────────────────────────────
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  adminId    String?  @map("admin_id")
+  action     ActivityAction
+  entityType String   @map("entity_type") // "MenuItem" | "Category" | ...
+  entityId   String?  @map("entity_id")
+  summary    String?
+  metadata   Json?
+  ip         String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  admin Admin? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([adminId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+// ─── Analytics (Task 22) ─────────────────────────────────────
+
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  type       AnalyticsEventType
+  itemId     String?  @map("item_id")
+  categoryId String?  @map("category_id")
+  path       String?
+  // Coarse anonymous visitor id (hashed, rotated daily) for unique-visitor counts.
+  visitorId  String?  @map("visitor_id")
+  userAgent  String?  @map("user_agent")
+  ip         String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([type, createdAt])
+  @@index([itemId])
+  @@index([categoryId])
+  @@index([createdAt])
+  @@map("analytics_events")
+}

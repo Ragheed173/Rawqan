@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design tokens (Task: Design System) ────────────────────
+   Colors expressed as HSL channels so Tailwind's hsl(var(--x)) works and the
+   admin theme editor can override them at runtime. Source hex:
+   primary #111111 · secondary #1B1B1B · accent #D4AF37 · bg #F7F4EF
+   card #FFFFFF · text #111111 · muted #777777 · border #ECECEC          */
+@layer base {
+  :root {
+    --background: 39 33% 95%; /* #F7F4EF */
+    --foreground: 0 0% 7%; /* #111111 */
+
+    --card: 0 0% 100%; /* #FFFFFF */
+    --card-foreground: 0 0% 7%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 7%;
+
+    --primary: 0 0% 7%; /* #111111 */
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 0 0% 11%; /* #1B1B1B */
+    --secondary-foreground: 0 0% 98%;
+
+    --accent: 46 65% 52%; /* #D4AF37 */
+    --accent-foreground: 0 0% 7%;
+
+    --muted: 40 20% 90%;
+    --muted-foreground: 0 0% 47%; /* #777777 */
+
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 93%; /* #ECECEC */
+    --input: 0 0% 93%;
+    --ring: 46 65% 52%;
+
+    --radius: 0.9rem;
+  }
+
+  /* Dark surface used by the admin shell and dark hero sections */
+  .dark {
+    --background: 0 0% 7%;
+    --foreground: 0 0% 96%;
+    --card: 0 0% 11%;
+    --card-foreground: 0 0% 96%;
+    --popover: 0 0% 11%;
+    --popover-foreground: 0 0% 96%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 7%;
+    --secondary: 0 0% 16%;
+    --secondary-foreground: 0 0% 96%;
+    --accent: 46 65% 52%;
+    --accent-foreground: 0 0% 7%;
+    --muted: 0 0% 16%;
+    --muted-foreground: 0 0% 65%;
+    --border: 0 0% 18%;
+    --input: 0 0% 18%;
+    --ring: 46 65% 52%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: 'kern', 'liga';
+  }
+
+  /* Latin text uses Poppins */
+  :lang(en),
+  .font-latin {
+    font-family: 'Poppins', system-ui, sans-serif;
+  }
+
+  ::selection {
+    @apply bg-accent/30 text-ink;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/30 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/50;
+  }
+}
+
+@layer components {
+  /* Skeleton shimmer used by loading states (Task 12) */
+  .skeleton {
+    @apply relative overflow-hidden bg-muted/60 rounded-md;
+  }
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0 -translate-x-full;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--card) / 0.6),
+      transparent
+    );
+    animation: shimmer 1.6s infinite;
+  }
+
+  /* Hide horizontal scrollbar for the category rail */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@layer utilities {
+  /* Respect reduced-motion preferences (Task 11: accessibility) */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

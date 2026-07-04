@@ -1,0 +1,31 @@
+# Build context is the repo root. Keep it lean and host-agnostic:
+# node_modules are reinstalled inside the image from package-lock.json.
+**/node_modules
+**/dist
+**/build
+**/.vite
+**/*.tsbuildinfo
+
+# Secrets & local env (never bake into images)
+**/.env
+**/.env.*
+!**/.env.example
+
+# VCS / editor / OS
+.git
+.github
+.gitignore
+.vscode
+.idea
+**/.DS_Store
+**/Thumbs.db
+
+# Logs, coverage, uploads
+**/*.log
+**/coverage
+backend/uploads
+
+# Docs & scratch not needed at build time
+docs
+*.md
+!frontend/README.md
