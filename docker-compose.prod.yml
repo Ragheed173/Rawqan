@@ -35,7 +35,9 @@ services:
       NODE_ENV: production
       PORT: 4000
       # Point the app at the db service regardless of what's in .env.
+      # The Postgres container is not pooled, so pooled + direct are identical here.
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-rawaqan}?schema=public
+      DIRECT_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-rawaqan}?schema=public
     depends_on:
       db:
         condition: service_healthy

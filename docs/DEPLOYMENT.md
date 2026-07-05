@@ -16,9 +16,20 @@ Set every var from `backend/.env.example`. Generate strong secrets:
 ```bash
 openssl rand -base64 48   # JWT_ACCESS_SECRET, and again for JWT_REFRESH_SECRET
 ```
-Required: `NODE_ENV=production`, `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`,
-`CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET`, `PUBLIC_SITE_URL` (public frontend URL — QR target),
-`CORS_ORIGINS` (comma-separated frontend origins).
+Required: `NODE_ENV=production`, `DATABASE_URL`, `DIRECT_URL`, `JWT_ACCESS_SECRET`,
+`JWT_REFRESH_SECRET`, `CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET`, `PUBLIC_SITE_URL`
+(public frontend URL — QR target), `CORS_ORIGINS` (comma-separated frontend origins).
+
+**Neon:** set `DATABASE_URL` to the **pooled** endpoint (host contains `-pooler`, append
+`?pgbouncer=true&connection_limit=1`) and `DIRECT_URL` to the **direct** endpoint (no `-pooler`).
+Prisma uses `DIRECT_URL` for `migrate deploy` and `DATABASE_URL` for runtime queries. Run
+migrations as a one-off release command, not inside the always-on web process, when running
+multiple instances.
+
+**Cross-site cookies (Vercel frontend + Render API = different sites):** in production the refresh
+cookie is issued `SameSite=None; Secure` (auto, when `NODE_ENV=production`), so both domains must be
+HTTPS and `CORS_ORIGINS` must list the exact Vercel origin. Alternatively proxy `/api/*` from Vercel
+to Render to keep everything first-party (then cookies are `Lax` and CSRF surface shrinks).
 
 ### Build & migrate & run
 ```bash
@@ -94,10 +105,25 @@ typecheck + build → frontend build → Docker image builds for both services. 
 
 ## Security posture (implemented)
 Helmet headers + Nginx CSP/security headers · CORS allow-list · per-route + auth rate limiting ·
-Zod validation on every input · bcrypt(12) password hashing · JWT access + rotating hashed refresh
-tokens (httpOnly) · role/permission-based access control · Prisma parameterized queries
+per-account brute-force lockout · Zod validation on every input · bcrypt(12) password hashing ·
+JWT access + rotating hashed refresh tokens (httpOnly) · role/permission-based access control ·
+Prisma parameterized queries
 (SQL-injection safe) · Multer 2.x with type/size limits · malformed-JSON → 400 · activity/audit log.
 Review before launch and add WAF/CDN protections as needed.
+
+### Brute-force lockout (H3, implemented)
+Beyond the IP rate limiter, each account locks after `LOGIN_MAX_ATTEMPTS` (default 5) consecutive
+failed logins for `LOGIN_LOCK_MINUTES` (default 15) — persisted on `admins.failed_login_attempts` /
+`admins.locked_until`, so it survives restarts and works across instances (unlike the in-memory
+limiter). A locked account is rejected with `429` before the password is checked; a successful login
+clears the counter. Pure decision logic lives in `auth/lockout.ts` (unit-tested). Refresh-token
+**reuse detection** and opportunistic expiry pruning are also in `auth.service.ts`.
+
+### Scaling note — IP rate limiting (follow-up)
+The `express-rate-limit` store is in-memory and **per-instance**, resetting on restart. Fine on a
+single Render instance. Before scaling horizontally, back it with Redis (`rate-limit-redis` + Render
+Key Value / Upstash). The per-account lockout above already covers distributed credential-stuffing
+against a single account regardless of instance count.
 
 ### Known advisory (accepted)
 `npm audit` reports 2 **moderate** advisories from a transitive dependency (`exceljs` → `uuid`):

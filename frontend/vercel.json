@@ -1,5 +1,14 @@
 {
+  "$comment": "Set YOUR-API origin so /sitemap.xml and /robots.txt are served dynamically (absolute URLs + dish pages) by the API. These rewrites MUST precede the SPA catch-all.",
   "rewrites": [
+    {
+      "source": "/sitemap.xml",
+      "destination": "https://YOUR-API.onrender.com/sitemap.xml"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "https://YOUR-API.onrender.com/robots.txt"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
