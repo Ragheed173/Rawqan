@@ -5,10 +5,17 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatPrice(value: number | null | undefined): string {
+export function formatPrice(
+  value: number | null | undefined,
+  currency = 'ILS'
+): string {
   if (value == null) return '';
 
-  return `₪${Number(value).toFixed(0)}`;
+  return new Intl.NumberFormat('ar-PS', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
 export function discountPercent(price: number, discount?: number | null): number | null {
