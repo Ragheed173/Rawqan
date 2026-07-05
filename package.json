@@ -20,7 +20,8 @@
     "db:studio": "npm run db:studio --workspace backend"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "concurrently": "^9.1.0",
+    "rollup": "^4.62.2"
   },
   "engines": {
     "node": ">=20"
