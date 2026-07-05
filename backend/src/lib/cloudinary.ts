@@ -50,4 +50,14 @@ export async function deleteAsset(publicId: string): Promise<void> {
   await cloudinary.uploader.destroy(publicId);
 }
 
+/**
+ * Best-effort batch deletion. Never throws — orphan cleanup must not block or
+ * fail the DB operation it accompanies. Nulls/blanks are skipped.
+ */
+export async function deleteAssets(publicIds: (string | null | undefined)[]): Promise<void> {
+  const ids = publicIds.filter((id): id is string => Boolean(id));
+  if (!cloudinaryEnabled || ids.length === 0) return;
+  await Promise.allSettled(ids.map((id) => cloudinary.uploader.destroy(id)));
+}
+
 export { cloudinaryEnabled };

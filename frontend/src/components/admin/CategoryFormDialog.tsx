@@ -45,6 +45,7 @@ export function CategoryFormDialog({ open, onOpenChange, category }: Props) {
   const qc = useQueryClient();
   const isEdit = Boolean(category);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imagePublicId, setImagePublicId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
   const {
@@ -62,6 +63,7 @@ export function CategoryFormDialog({ open, onOpenChange, category }: Props) {
         description: category?.description ?? '',
       });
       setImageUrl(category?.imageUrl ?? null);
+      setImagePublicId(category?.imagePublicId ?? null);
     }
   }, [open, category, reset]);
 
@@ -82,6 +84,7 @@ export function CategoryFormDialog({ open, onOpenChange, category }: Props) {
     try {
       const res = await adminUploadService.uploadOne(files[0], 'categories');
       setImageUrl(res.url);
+      setImagePublicId(res.publicId);
       toast.success('تم رفع الصورة');
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'فشل رفع الصورة'));
@@ -96,6 +99,7 @@ export function CategoryFormDialog({ open, onOpenChange, category }: Props) {
       nameEn: values.nameEn || null,
       description: values.description || null,
       imageUrl,
+      imagePublicId,
     });
 
   return (
@@ -127,7 +131,10 @@ export function CategoryFormDialog({ open, onOpenChange, category }: Props) {
                 <LazyImage src={imageUrl} alt="" wrapperClassName="h-full w-full" />
                 <button
                   type="button"
-                  onClick={() => setImageUrl(null)}
+                  onClick={() => {
+                    setImageUrl(null);
+                    setImagePublicId(null);
+                  }}
                   className="absolute left-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-black/60 text-white"
                   aria-label="إزالة الصورة"
                 >

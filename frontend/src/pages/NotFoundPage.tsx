@@ -8,7 +8,7 @@ export default function NotFoundPage() {
       <Seo title="الصفحة غير موجودة" />
       <div className="grid min-h-[70vh] place-items-center px-4 pt-20">
         <div className="text-center">
-          <p className="font-display text-8xl font-bold text-accent">404</p>
+          <p className="font-display text-8xl font-bold text-accent-ink">404</p>
           <h1 className="mt-4 font-display text-2xl font-semibold text-foreground">
             الصفحة غير موجودة
           </h1>

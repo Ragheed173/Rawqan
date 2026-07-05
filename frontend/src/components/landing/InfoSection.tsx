@@ -31,6 +31,7 @@ export function InfoSection({ settings }: { settings?: RestaurantSettings }) {
           eyebrow="زورونا"
           title="نحن في انتظاركم"
           subtitle="تفضلوا بزيارتنا أو تواصلوا معنا لأي استفسار"
+          onDark
           className="[&_h2]:text-white [&_p]:text-white/60"
         />
 

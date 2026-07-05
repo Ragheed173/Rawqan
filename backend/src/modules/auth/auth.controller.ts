@@ -8,18 +8,22 @@ import * as authService from './auth.service.js';
 
 const REFRESH_COOKIE = 'rawaqan_rt';
 
+// Cross-site in production: the SPA (Vercel) and API (Render) are different
+// sites, so the refresh cookie must be SameSite=None; Secure to be sent on
+// XHR. Lax over http in dev. clear must use identical attributes to match.
+const cookieOptions = {
+  httpOnly: true as const,
+  secure: isProd,
+  sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
+  path: '/api/auth',
+};
+
 function setRefreshCookie(res: Response, token: string) {
-  res.cookie(REFRESH_COOKIE, token, {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: 'lax',
-    path: '/api/auth',
-    maxAge: ttlToMs(env.JWT_REFRESH_TTL),
-  });
+  res.cookie(REFRESH_COOKIE, token, { ...cookieOptions, maxAge: ttlToMs(env.JWT_REFRESH_TTL) });
 }
 
 function clearRefreshCookie(res: Response) {
-  res.clearCookie(REFRESH_COOKIE, { path: '/api/auth' });
+  res.clearCookie(REFRESH_COOKIE, cookieOptions);
 }
 
 function sessionCtx(req: Request) {

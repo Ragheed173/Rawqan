@@ -24,8 +24,13 @@ export async function getPublicBySlug(req: Request, res: Response) {
 }
 
 export async function listAdmin(req: Request, res: Response) {
-  const items = await service.listAdmin(req.query as never);
-  return sendSuccess(res, items.map(serializeItem));
+  const { data, total, page, pageSize } = await service.listAdmin(req.query as never);
+  return sendSuccess(res, data.map(serializeItem), 200, {
+    page,
+    pageSize,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+  });
 }
 
 export async function getById(req: Request, res: Response) {

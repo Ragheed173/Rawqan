@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { uniqueSlug } from '../../utils/slug.js';
+import { deleteOrphanedAssets } from '../upload/assetCleanup.js';
 import type { CreateItemInput, ListItemsQuery, UpdateItemInput } from './item.schemas.js';
 
 const itemInclude = {
@@ -94,14 +95,29 @@ export function getRelated(item: { id: string; categoryId: string }, limit = 6) 
   });
 }
 
-export function listAdmin(q: ListItemsQuery) {
+/** Paginated admin listing with filters. Returns rows + total for the meta envelope. */
+export async function listAdmin(q: ListItemsQuery) {
   const where: Prisma.MenuItemWhereInput = {
     // Archived items are hidden by default; `archived=true` shows only them.
     isArchived: q.archived ?? false,
     ...(q.categoryId ? { categoryId: q.categoryId } : {}),
     ...(q.search ? { name: { contains: q.search, mode: 'insensitive' } } : {}),
   };
-  return prisma.menuItem.findMany({ where, orderBy: buildOrderBy(q.sort), include: itemInclude });
+  const page = q.page ?? 1;
+  const pageSize = q.pageSize ?? 20;
+
+  const [data, total] = await Promise.all([
+    prisma.menuItem.findMany({
+      where,
+      orderBy: buildOrderBy(q.sort),
+      include: itemInclude,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.menuItem.count({ where }),
+  ]);
+
+  return { data, total, page, pageSize };
 }
 
 export async function getById(id: string) {
@@ -151,8 +167,15 @@ export async function update(id: string, input: UpdateItemInput) {
 }
 
 export async function remove(id: string) {
-  await getById(id);
+  const item = await prisma.menuItem.findUnique({
+    where: { id },
+    select: { id: true, images: { select: { publicId: true } } },
+  });
+  if (!item) throw ApiError.notFound('Item not found');
+  // Delete the DB row first (cascades images/tags); then best-effort Cloudinary
+  // cleanup so we never leave the DB inconsistent if the image API is flaky.
   await prisma.menuItem.delete({ where: { id } });
+  await deleteOrphanedAssets(item.images.map((img) => img.publicId));
 }
 
 /** Deep-duplicates an item (new slug, copied images/tags, marked unavailable). */

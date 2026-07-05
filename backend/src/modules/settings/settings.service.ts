@@ -1,5 +1,6 @@
 import type { OpeningHour, RestaurantSettings, Weekday } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
+import { deleteAssets } from '../../lib/cloudinary.js';
 import type { UpdateHoursInput, UpdateSettingsInput } from './settings.schemas.js';
 
 const WEEK_ORDER: Weekday[] = [
@@ -56,7 +57,9 @@ function serialize(settings: RestaurantSettings & { openingHours: OpeningHour[] 
     taglineEn: settings.taglineEn,
     description: settings.description,
     logoUrl: settings.logoUrl,
+    logoPublicId: settings.logoPublicId,
     coverUrl: settings.coverUrl,
+    coverPublicId: settings.coverPublicId,
     phone: settings.phone,
     whatsapp: settings.whatsapp,
     facebook: settings.facebook,
@@ -93,6 +96,16 @@ export async function get() {
 
 export async function update(input: UpdateSettingsInput) {
   const current = await ensureSettings();
+  // Clean up replaced logo/cover assets (best-effort).
+  const orphans: string[] = [];
+  if (input.logoPublicId !== undefined && current.logoPublicId && current.logoPublicId !== input.logoPublicId) {
+    orphans.push(current.logoPublicId);
+  }
+  if (input.coverPublicId !== undefined && current.coverPublicId && current.coverPublicId !== input.coverPublicId) {
+    orphans.push(current.coverPublicId);
+  }
+  if (orphans.length) await deleteAssets(orphans);
+
   const updated = await prisma.restaurantSettings.update({
     where: { id: current.id },
     data: input,

@@ -82,6 +82,7 @@ export function serializeCategory(category: CategoryWithItems) {
     nameEn: category.nameEn,
     description: category.description,
     imageUrl: category.imageUrl,
+    imagePublicId: category.imagePublicId,
     sortOrder: category.sortOrder,
     isActive: category.isActive,
     itemCount: category._count?.items ?? category.items?.length ?? 0,

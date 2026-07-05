@@ -24,8 +24,12 @@
     --secondary: 0 0% 11%; /* #1B1B1B */
     --secondary-foreground: 0 0% 98%;
 
-    --accent: 46 65% 52%; /* #D4AF37 */
+    --accent: 46 65% 52%; /* #D4AF37 — brand gold, use as background or on dark */
     --accent-foreground: 0 0% 7%;
+    /* Accessible gold for gold-colored TEXT on light surfaces. #856810 →
+       4.8:1 on cream / 5.3:1 on white (WCAG AA). Brand gold is only ~2:1 as
+       text on light, so text-accent-ink is used wherever gold reads as text. */
+    --accent-ink: 45 79% 29%; /* #856810 */
 
     --muted: 40 20% 90%;
     --muted-foreground: 0 0% 47%; /* #777777 */
@@ -54,6 +58,8 @@
     --secondary-foreground: 0 0% 96%;
     --accent: 46 65% 52%;
     --accent-foreground: 0 0% 7%;
+    /* On dark surfaces the brand gold already clears AA (~9:1), so ink = gold. */
+    --accent-ink: 46 65% 52%;
     --muted: 0 0% 16%;
     --muted-foreground: 0 0% 65%;
     --border: 0 0% 18%;

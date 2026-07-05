@@ -14,11 +14,19 @@ const envSchema = z.object({
     .transform((v) => v.split(',').map((s) => s.trim()).filter(Boolean)),
 
   DATABASE_URL: z.string().url(),
+  // Direct (non-pooled) connection for Prisma migrations. Optional at runtime
+  // (the client uses DATABASE_URL); Prisma reads it from the environment for
+  // `migrate`/`introspect`. Defaults to DATABASE_URL when unset.
+  DIRECT_URL: z.string().url().optional(),
 
   JWT_ACCESS_SECRET: z.string().min(16),
   JWT_REFRESH_SECRET: z.string().min(16),
   JWT_ACCESS_TTL: z.string().default('15m'),
   JWT_REFRESH_TTL: z.string().default('7d'),
+
+  // Per-account brute-force lockout: lock after N failed logins for M minutes.
+  LOGIN_MAX_ATTEMPTS: z.coerce.number().int().min(1).default(5),
+  LOGIN_LOCK_MINUTES: z.coerce.number().int().min(1).default(15),
 
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
   CLOUDINARY_API_KEY: z.string().optional(),

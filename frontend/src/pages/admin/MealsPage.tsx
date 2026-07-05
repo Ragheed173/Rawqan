@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Copy, Pencil, Plus, Search, Trash2, UtensilsCrossed } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, Pencil, Plus, Search, Trash2, UtensilsCrossed } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/admin/PageHeader';
 import { Card } from '@/components/ui/card';
@@ -15,6 +15,7 @@ import { Seo } from '@/components/shared/Seo';
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog';
 import { useAdminCategories, useAdminItems, adminKeys } from '@/hooks/admin/useAdminQueries';
 import { adminItemService } from '@/services/admin/admin.service';
+import { useDebounce } from '@/hooks/useDebounce';
 import { getApiErrorMessage } from '@/lib/apiClient';
 import { formatPrice } from '@/lib/utils';
 import type { MenuItem } from '@/types';
@@ -24,10 +25,22 @@ export default function MealsPage() {
   const navigate = useNavigate();
   const { data: categories } = useAdminCategories();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: meals, isLoading } = useAdminItems({ archived: showArchived });
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState<string>('');
+  const [page, setPage] = useState(1);
   const [deleting, setDeleting] = useState<MenuItem | null>(null);
+  const debouncedSearch = useDebounce(search, 300);
+
+  // Server-side filtering + pagination; reset to page 1 when filters change.
+  useEffect(() => setPage(1), [debouncedSearch, categoryId, showArchived]);
+  const { data: result, isLoading } = useAdminItems({
+    archived: showArchived,
+    search: debouncedSearch || undefined,
+    categoryId: categoryId || undefined,
+    page,
+    pageSize: 20,
+  });
+  const meta = result?.meta;
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['admin', 'items'] });
@@ -86,15 +99,11 @@ export default function MealsPage() {
     });
   };
 
-  const filtered = useMemo(() => {
-    if (!meals) return [];
-    return meals.filter(
-      (m) =>
-        !hiddenIds.has(m.id) &&
-        (!categoryId || m.categoryId === categoryId) &&
-        (!search || m.name.toLowerCase().includes(search.toLowerCase())),
-    );
-  }, [meals, categoryId, search, hiddenIds]);
+  // Server already filters/paginates; only hide items in the undo window.
+  const filtered = useMemo(
+    () => (result?.data ?? []).filter((m) => !hiddenIds.has(m.id)),
+    [result, hiddenIds],
+  );
 
   const catName = (id: string) => categories?.find((c) => c.id === id)?.name ?? '';
 
@@ -217,6 +226,33 @@ export default function MealsPage() {
             ) : undefined
           }
         />
+      )}
+
+      {/* Pagination */}
+      {meta && meta.totalPages > 1 && (
+        <div className="mt-6 flex items-center justify-center gap-3">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            aria-label="السابق"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            {meta.page} / {meta.totalPages} · {meta.total} وجبة
+          </span>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
+            disabled={page >= meta.totalPages}
+            aria-label="التالي"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+        </div>
       )}
 
       <ConfirmDialog

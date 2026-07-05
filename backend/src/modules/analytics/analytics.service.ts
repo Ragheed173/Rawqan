@@ -54,12 +54,22 @@ const startOfDaysAgo = (days: number) => {
 /** Aggregated dashboard metrics over a rolling window. */
 export async function summary(days = 30) {
   const since = startOfDaysAgo(days);
+  const startToday = startOfDaysAgo(1);
 
-  const [events, topItems, topCategories, qrScans, uniqueToday] = await Promise.all([
-    prisma.analyticsEvent.findMany({
-      where: { createdAt: { gte: since } },
-      select: { type: true, visitorId: true, createdAt: true },
-    }),
+  // All aggregation happens in Postgres — no full event scan into Node memory.
+  const [totalsRow, dailyRows, topItems, topCategories] = await Promise.all([
+    prisma.$queryRaw<{ views: bigint; visitors: bigint; qr: bigint }[]>`
+      SELECT
+        COUNT(*) FILTER (WHERE "type"::text IN ('ITEM_VIEW','PAGE_VIEW')) AS views,
+        COUNT(DISTINCT "visitor_id") AS visitors,
+        COUNT(*) FILTER (WHERE "type"::text = 'QR_SCAN') AS qr
+      FROM "analytics_events"
+      WHERE "created_at" >= ${since}`,
+    prisma.$queryRaw<{ day: Date; visitors: bigint }[]>`
+      SELECT date_trunc('day', "created_at") AS day, COUNT(DISTINCT "visitor_id") AS visitors
+      FROM "analytics_events"
+      WHERE "created_at" >= ${since}
+      GROUP BY day ORDER BY day`,
     prisma.menuItem.findMany({
       where: { viewCount: { gt: 0 } },
       orderBy: { viewCount: 'desc' },
@@ -73,27 +83,20 @@ export async function summary(days = 30) {
       orderBy: { _count: { categoryId: 'desc' } },
       take: 6,
     }),
-    prisma.analyticsEvent.count({ where: { type: 'QR_SCAN', createdAt: { gte: since } } }),
-    prisma.analyticsEvent.findMany({
-      where: { createdAt: { gte: startOfDaysAgo(1) } },
-      select: { visitorId: true },
-      distinct: ['visitorId'],
-    }),
   ]);
 
-  // Daily visitors: unique visitorIds per day
-  const byDay = new Map<string, Set<string>>();
-  for (const e of events) {
-    const key = e.createdAt.toISOString().slice(0, 10);
-    if (!byDay.has(key)) byDay.set(key, new Set());
-    if (e.visitorId) byDay.get(key)!.add(e.visitorId);
-  }
+  const visitorsToday = await prisma.$queryRaw<{ count: bigint }[]>`
+    SELECT COUNT(DISTINCT "visitor_id") AS count
+    FROM "analytics_events" WHERE "created_at" >= ${startToday}`;
+
+  // Fill the day series (0 for days with no events).
+  const byDay = new Map(dailyRows.map((r) => [r.day.toISOString().slice(0, 10), Number(r.visitors)]));
   const dailyVisitors: { date: string; visitors: number }[] = [];
   for (let i = 0; i < days; i++) {
     const d = new Date(since);
     d.setDate(since.getDate() + i);
     const key = d.toISOString().slice(0, 10);
-    dailyVisitors.push({ date: key, visitors: byDay.get(key)?.size ?? 0 });
+    dailyVisitors.push({ date: key, visitors: byDay.get(key) ?? 0 });
   }
 
   // Resolve popular category names
@@ -101,16 +104,15 @@ export async function summary(days = 30) {
   const cats = await prisma.category.findMany({ where: { id: { in: catIds } }, select: { id: true, name: true } });
   const catName = new Map(cats.map((c) => [c.id, c.name]));
 
-  const totalViews = events.filter((e) => e.type === 'ITEM_VIEW' || e.type === 'PAGE_VIEW').length;
-  const totalVisitors = new Set(events.map((e) => e.visitorId).filter(Boolean)).size;
+  const totals = totalsRow[0] ?? { views: 0n, visitors: 0n, qr: 0n };
 
   return {
     range: { days, since: since.toISOString() },
     totals: {
-      views: totalViews,
-      visitors: totalVisitors,
-      visitorsToday: uniqueToday.length,
-      qrScans,
+      views: Number(totals.views),
+      visitors: Number(totals.visitors),
+      visitorsToday: Number(visitorsToday[0]?.count ?? 0),
+      qrScans: Number(totals.qr),
     },
     dailyVisitors,
     mostViewedItems: topItems.map((i) => ({

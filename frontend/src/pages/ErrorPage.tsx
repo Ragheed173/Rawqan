@@ -7,7 +7,7 @@ export function ErrorPage({ onReset }: { onReset?: () => void }) {
     <div className="grid min-h-screen place-items-center bg-background px-4">
       <div className="text-center">
         <Logo className="text-3xl text-foreground" />
-        <p className="mt-8 font-display text-7xl font-bold text-accent">500</p>
+        <p className="mt-8 font-display text-7xl font-bold text-accent-ink">500</p>
         <h1 className="mt-4 font-display text-2xl font-semibold text-foreground">حدث خطأ غير متوقع</h1>
         <p className="mt-2 max-w-sm text-muted-foreground">
           نعتذر عن ذلك. حدث خلل ما — يمكنك إعادة المحاولة أو العودة للرئيسية.

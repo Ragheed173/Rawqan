@@ -4,7 +4,8 @@ import { requireAuth } from '../../middleware/auth.js';
 import { validate } from '../../middleware/validate.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { prisma } from '../../lib/prisma.js';
-import { deleteAsset, uploadBuffer } from '../../lib/cloudinary.js';
+import { uploadBuffer } from '../../lib/cloudinary.js';
+import { deleteOrphanedAssets } from './assetCleanup.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { sendCreated, sendNoContent, sendSuccess } from '../../utils/http.js';
 import { serializeImage } from '../menu/menu.serializers.js';
@@ -69,8 +70,10 @@ router.delete(
   asyncHandler(async (req, res) => {
     const image = await prisma.itemImage.findUnique({ where: { id: req.params.imageId } });
     if (!image) throw ApiError.notFound('Image not found');
-    if (image.publicId) await deleteAsset(image.publicId);
     await prisma.itemImage.delete({ where: { id: image.id } });
+    // Only destroy the Cloudinary asset if no other row (e.g. a duplicated meal)
+    // still references the same publicId.
+    await deleteOrphanedAssets([image.publicId]);
 
     if (image.isPrimary) {
       const next = await prisma.itemImage.findFirst({

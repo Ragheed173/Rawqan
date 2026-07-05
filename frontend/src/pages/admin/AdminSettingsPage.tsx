@@ -49,7 +49,9 @@ export default function AdminSettingsPage() {
   const qc = useQueryClient();
   const { data: settings, isLoading } = useAdminSettings();
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoPublicId, setLogoPublicId] = useState<string | null>(null);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [coverPublicId, setCoverPublicId] = useState<string | null>(null);
   const [hours, setHours] = useState<OpeningHour[]>([]);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
@@ -74,7 +76,9 @@ export default function AdminSettingsPage() {
         footerText: settings.footerText ?? '',
       });
       setLogoUrl(settings.logoUrl);
+      setLogoPublicId(settings.logoPublicId);
       setCoverUrl(settings.coverUrl);
+      setCoverPublicId(settings.coverPublicId);
       setHours(settings.openingHours);
     }
   }, [settings, reset]);
@@ -107,8 +111,13 @@ export default function AdminSettingsPage() {
     setUploading(true);
     try {
       const res = await adminUploadService.uploadOne(files[0], kind);
-      if (kind === 'logo') setLogoUrl(res.url);
-      else setCoverUrl(res.url);
+      if (kind === 'logo') {
+        setLogoUrl(res.url);
+        setLogoPublicId(res.publicId);
+      } else {
+        setCoverUrl(res.url);
+        setCoverPublicId(res.publicId);
+      }
       toast.success('تم رفع الصورة');
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'فشل الرفع'));
@@ -124,7 +133,9 @@ export default function AdminSettingsPage() {
       tagline: values.tagline || null,
       description: values.description || null,
       logoUrl,
+      logoPublicId,
       coverUrl,
+      coverPublicId,
     } as Partial<RestaurantSettings>);
 
   const setHour = (weekday: Weekday, patch: Partial<OpeningHour>) =>
@@ -174,7 +185,7 @@ export default function AdminSettingsPage() {
                 {logoUrl ? (
                   <div className="relative h-24 w-24 overflow-hidden rounded-xl border border-border bg-ink">
                     <LazyImage src={logoUrl} alt="" wrapperClassName="h-full w-full" />
-                    <button type="button" onClick={() => setLogoUrl(null)} className="absolute left-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-black/60 text-white" aria-label="إزالة">
+                    <button type="button" onClick={() => { setLogoUrl(null); setLogoPublicId(null); }} className="absolute left-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-black/60 text-white" aria-label="إزالة">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -187,7 +198,7 @@ export default function AdminSettingsPage() {
                 {coverUrl ? (
                   <div className="relative aspect-video overflow-hidden rounded-xl border border-border">
                     <LazyImage src={coverUrl} alt="" wrapperClassName="h-full w-full" />
-                    <button type="button" onClick={() => setCoverUrl(null)} className="absolute left-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-black/60 text-white" aria-label="إزالة">
+                    <button type="button" onClick={() => { setCoverUrl(null); setCoverPublicId(null); }} className="absolute left-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-black/60 text-white" aria-label="إزالة">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>

@@ -74,6 +74,7 @@ export interface Category {
   nameEn: string | null;
   description: string | null;
   imageUrl: string | null;
+  imagePublicId: string | null;
   sortOrder: number;
   isActive: boolean;
   itemCount: number;
@@ -97,7 +98,9 @@ export interface RestaurantSettings {
   taglineEn: string | null;
   description: string | null;
   logoUrl: string | null;
+  logoPublicId: string | null;
   coverUrl: string | null;
+  coverPublicId: string | null;
   phone: string | null;
   whatsapp: string | null;
   facebook: string | null;

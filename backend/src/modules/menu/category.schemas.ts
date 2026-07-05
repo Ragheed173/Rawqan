@@ -5,6 +5,7 @@ export const createCategorySchema = z.object({
   nameEn: z.string().max(120).optional().nullable(),
   description: z.string().max(1000).optional().nullable(),
   imageUrl: z.string().url().optional().nullable(),
+  imagePublicId: z.string().max(300).optional().nullable(),
   sortOrder: z.number().int().optional(),
   isActive: z.boolean().optional(),
 });

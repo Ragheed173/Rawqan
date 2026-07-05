@@ -17,6 +17,7 @@ export interface CategoryInput {
   nameEn?: string | null;
   description?: string | null;
   imageUrl?: string | null;
+  imagePublicId?: string | null;
   isActive?: boolean;
 }
 
@@ -57,9 +58,24 @@ export interface ItemInput {
   tagIds?: string[];
 }
 
+export interface ItemListParams {
+  categoryId?: string;
+  search?: string;
+  archived?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface PagedItems {
+  data: MenuItem[];
+  meta: { page: number; pageSize: number; total: number; totalPages: number };
+}
+
 export const adminItemService = {
-  list: (params?: { categoryId?: string; search?: string; archived?: boolean }) =>
-    unwrap<MenuItem[]>(api.get('/admin/items', { params })),
+  list: async (params: ItemListParams = {}): Promise<PagedItems> => {
+    const res = await api.get('/admin/items', { params });
+    return res.data as PagedItems;
+  },
   get: (id: string) => unwrap<MenuItem>(api.get(`/admin/items/${id}`)),
   create: (data: ItemInput) => unwrap<MenuItem>(api.post('/admin/items', data)),
   update: (id: string, data: Partial<ItemInput>) => unwrap<MenuItem>(api.patch(`/admin/items/${id}`, data)),

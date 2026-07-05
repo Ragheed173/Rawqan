@@ -9,7 +9,11 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Runtime queries use the (pooled) URL; migrations/introspection use the
+  // direct URL. On Neon set DATABASE_URL=pooled (?pgbouncer=true) and
+  // DIRECT_URL=direct. Locally/Docker both point at the same Postgres.
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ─── Enums ───────────────────────────────────────────────────
@@ -62,6 +66,8 @@ model Admin {
   role         AdminRole @default(STAFF)
   isActive     Boolean  @default(true) @map("is_active")
   lastLoginAt  DateTime? @map("last_login_at")
+  failedLoginAttempts Int @default(0) @map("failed_login_attempts")
+  lockedUntil  DateTime? @map("locked_until")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -99,7 +105,9 @@ model RestaurantSettings {
   taglineEn      String?  @map("tagline_en")
   description    String?
   logoUrl        String?  @map("logo_url")
+  logoPublicId   String?  @map("logo_public_id")
   coverUrl       String?  @map("cover_url")
+  coverPublicId  String?  @map("cover_public_id")
   phone          String?
   whatsapp       String?
   facebook       String?
@@ -151,6 +159,7 @@ model Category {
   nameEn      String?  @map("name_en")
   description String?
   imageUrl    String?  @map("image_url")
+  imagePublicId String? @map("image_public_id") // Cloudinary id, for cleanup on replace/delete
   sortOrder   Int      @default(0) @map("sort_order")
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")

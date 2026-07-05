@@ -97,7 +97,7 @@ export default function DashboardPage() {
         <Card className="p-6 lg:col-span-2">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="font-display text-lg font-semibold">أحدث الوجبات</h2>
-            <Link to="/admin/meals" className="text-sm text-accent hover:underline">
+            <Link to="/admin/meals" className="text-sm text-accent-ink hover:underline">
               عرض الكل
             </Link>
           </div>

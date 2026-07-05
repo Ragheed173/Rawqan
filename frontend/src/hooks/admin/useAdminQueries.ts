@@ -8,13 +8,13 @@ import {
   adminSettingsService,
   adminTagService,
   adminUserService,
+  type ItemListParams,
 } from '@/services/admin/admin.service';
 
 export const adminKeys = {
   dashboard: ['admin', 'dashboard'] as const,
   categories: ['admin', 'categories'] as const,
-  items: (params?: { categoryId?: string; search?: string; archived?: boolean }) =>
-    ['admin', 'items', params ?? {}] as const,
+  items: (params?: ItemListParams) => ['admin', 'items', params ?? {}] as const,
   item: (id: string) => ['admin', 'item', id] as const,
   tags: ['admin', 'tags'] as const,
   settings: ['admin', 'settings'] as const,
@@ -38,8 +38,12 @@ export const useDashboardStats = () =>
 export const useAdminCategories = () =>
   useQuery({ queryKey: adminKeys.categories, queryFn: adminCategoryService.list });
 
-export const useAdminItems = (params?: { categoryId?: string; search?: string; archived?: boolean }) =>
-  useQuery({ queryKey: adminKeys.items(params), queryFn: () => adminItemService.list(params) });
+export const useAdminItems = (params?: ItemListParams) =>
+  useQuery({
+    queryKey: adminKeys.items(params),
+    queryFn: () => adminItemService.list(params),
+    placeholderData: (prev) => prev, // keep previous page while fetching the next
+  });
 
 export const useAdminTags = () =>
   useQuery({ queryKey: adminKeys.tags, queryFn: adminTagService.list });

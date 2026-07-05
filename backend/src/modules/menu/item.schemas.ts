@@ -81,6 +81,9 @@ export const listItemsQuerySchema = z.object({
   archived: queryBool,
   sort: z.enum(['popular', 'price_asc', 'price_desc', 'newest', 'name']).optional(),
   limit: z.coerce.number().int().positive().max(100).optional(),
+  // Admin pagination (public listing ignores these).
+  page: z.coerce.number().int().min(1).optional(),
+  pageSize: z.coerce.number().int().min(1).max(100).optional(),
 });
 
 export const idParamSchema = z.object({ id: z.string().cuid() });
