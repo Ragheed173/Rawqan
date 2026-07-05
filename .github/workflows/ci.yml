@@ -30,8 +30,14 @@ jobs:
       - name: Typecheck backend
         run: npm run typecheck --workspace backend
 
+      - name: Test backend
+        run: npm run test --workspace backend
+
       - name: Build backend
         run: npm run build --workspace backend
+
+      - name: Test frontend
+        run: npm run test --workspace frontend
 
       - name: Build frontend
         run: npm run build --workspace frontend
