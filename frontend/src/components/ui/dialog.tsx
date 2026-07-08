@@ -19,7 +19,7 @@ export const DialogContent = React.forwardRef<
         // Cap height at 90vh so tall dialogs never exceed the viewport on any
         // screen; the body scrolls inside while the close button stays pinned.
         // overflow-hidden clips the inner scroll area to the rounded corners.
-        'fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-card focus:outline-none data-[state=open]:animate-slide-up',
+        'fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-card focus:outline-none data-[state=open]:animate-dialog-in',
         className,
       )}
       {...props}
