@@ -4,7 +4,8 @@ import { cn, formatPrice, discountPercent } from './utils';
 describe('cn', () => {
   it('merges and dedupes tailwind classes', () => {
     expect(cn('p-2', 'p-4')).toBe('p-4'); // later wins
-    expect(cn('text-sm', false && 'hidden', 'font-bold')).toBe('text-sm font-bold');
+    const hidden = false as boolean; // runtime flag — falsy classes are dropped
+    expect(cn('text-sm', hidden && 'hidden', 'font-bold')).toBe('text-sm font-bold');
   });
 });
 
@@ -26,7 +27,7 @@ describe('formatPrice', () => {
 describe('discountPercent', () => {
   it('computes the rounded percentage off', () => {
     expect(discountPercent(100, 80)).toBe(20);
-    expect(discountPercent(690, 780 >= 690 ? undefined : 780)).toBeNull();
+    expect(discountPercent(200, 150)).toBe(25);
   });
 
   it('returns null when there is no valid discount', () => {

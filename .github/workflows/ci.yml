@@ -27,6 +27,9 @@ jobs:
       - name: Generate Prisma client
         run: npm run db:generate --workspace backend
 
+      - name: Lint backend
+        run: npm run lint --workspace backend
+
       - name: Typecheck backend
         run: npm run typecheck --workspace backend
 
@@ -35,6 +38,9 @@ jobs:
 
       - name: Build backend
         run: npm run build --workspace backend
+
+      - name: Lint frontend
+        run: npm run lint --workspace frontend
 
       - name: Test frontend
         run: npm run test --workspace frontend
