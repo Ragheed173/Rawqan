@@ -9,11 +9,20 @@ import type { RestaurantSettings } from '@/types';
 const FALLBACK_COVER =
   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=2000&q=80';
 
+/** Last cover delivered by the API, so repeat visits paint the right image
+ *  instantly instead of waiting ~1 RTT for /api/settings (LCP render delay). */
+const COVER_CACHE_KEY = 'rawaqan:cover';
+
+function cachedCover(): string | null {
+  try {
+    return localStorage.getItem(COVER_CACHE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 interface HeroProps {
   settings?: RestaurantSettings;
-  /** True while settings are still loading — delays the cover so we never
-   *  download the fallback image only to swap it for the real cover (LCP). */
-  settingsPending?: boolean;
 }
 
 /**
@@ -25,7 +34,7 @@ interface HeroProps {
  * element geometry (offsetWidth/clientHeight/getBoundingClientRect), so first
  * paint never forces a synchronous layout.
  */
-export function Hero({ settings, settingsPending = false }: HeroProps) {
+export function Hero({ settings }: HeroProps) {
   const bgRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const cueRef = useRef<HTMLAnchorElement>(null);
@@ -63,26 +72,36 @@ export function Hero({ settings, settingsPending = false }: HeroProps) {
     };
   }, []);
 
-  const cover = settings?.coverUrl ?? FALLBACK_COVER;
+  // Render the image IMMEDIATELY — never gate the LCP element on the settings
+  // request. Cached cover (repeat visits) or the static fallback paints at
+  // once; the real cover simply replaces it when settings arrive.
+  const cover = settings?.coverUrl ?? cachedCover() ?? FALLBACK_COVER;
+
+  useEffect(() => {
+    if (!settings?.coverUrl) return;
+    try {
+      localStorage.setItem(COVER_CACHE_KEY, settings.coverUrl);
+    } catch {
+      /* storage unavailable — harmless */
+    }
+  }, [settings?.coverUrl]);
 
   return (
     <section className="relative flex h-[100svh] min-h-[600px] items-center justify-center overflow-hidden">
       {/* Parallax background (transform-only, driven by the rAF listener) */}
       <div ref={bgRef} className="absolute inset-0 -z-10 bg-neutral-900 will-change-transform">
-        {!settingsPending && (
-          <img
-            src={optimizedImageUrl(cover, 1280, 'hero')}
-            srcSet={imageSrcSet(cover, HERO_IMAGE_WIDTHS, 'hero')}
-            sizes="100vw"
-            alt=""
-            width={1280}
-            height={853}
-            className="h-[120%] w-full object-cover"
-            loading="eager"
-            decoding="async"
-            fetchPriority="high"
-          />
-        )}
+        <img
+          src={optimizedImageUrl(cover, 1280, 'hero')}
+          srcSet={imageSrcSet(cover, HERO_IMAGE_WIDTHS, 'hero')}
+          sizes="100vw"
+          alt=""
+          width={1280}
+          height={853}
+          className="h-[120%] w-full object-cover"
+          loading="eager"
+          decoding="async"
+          fetchPriority="high"
+        />
         <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80" />
       </div>
 

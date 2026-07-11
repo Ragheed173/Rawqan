@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { Download, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -42,15 +41,10 @@ export function InstallPrompt() {
     setVisible(false);
   };
 
+  if (!visible) return null;
+
   return (
-    <AnimatePresence>
-      {visible && (
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 40 }}
-          className="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-card sm:inset-x-auto sm:right-4"
-        >
+    <div className="animate-slide-up fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-card sm:inset-x-auto sm:right-4">
           <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent/15 text-accent">
             <Download className="h-5 w-5" />
           </div>
@@ -61,11 +55,9 @@ export function InstallPrompt() {
           <Button size="sm" variant="gold" onClick={install}>
             تثبيت
           </Button>
-          <button onClick={dismiss} aria-label="إغلاق" className="text-muted-foreground hover:text-foreground">
-            <X className="h-4 w-4" />
-          </button>
-        </motion.div>
-      )}
-    </AnimatePresence>
+      <button onClick={dismiss} aria-label="إغلاق" className="text-muted-foreground hover:text-foreground">
+        <X className="h-4 w-4" />
+      </button>
+    </div>
   );
 }

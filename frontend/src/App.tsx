@@ -1,10 +1,14 @@
 import { Suspense, lazy } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { SiteLayout } from '@/layouts/SiteLayout';
-import { AdminLayout } from '@/layouts/AdminLayout';
-import { ProtectedRoute } from '@/components/admin/ProtectedRoute';
 import { ScrollToTop } from '@/components/shared/ScrollToTop';
 import { PageLoader } from '@/components/shared/PageLoader';
+
+// Admin shell is never needed on the public route — keep it out of the entry.
+const AdminLayout = lazy(() => import('@/layouts/AdminLayout').then((m) => ({ default: m.AdminLayout })));
+const ProtectedRoute = lazy(() =>
+  import('@/components/admin/ProtectedRoute').then((m) => ({ default: m.ProtectedRoute })),
+);
 
 // Route-level code splitting (Task 12: performance)
 const LandingPage = lazy(() => import('@/pages/LandingPage'));

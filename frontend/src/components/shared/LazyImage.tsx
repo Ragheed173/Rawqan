@@ -50,8 +50,10 @@ export function LazyImage({
           srcSet={srcSet}
           sizes={srcSet ? (sizes ?? '(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw') : sizes}
           className={cn(
-            'h-full w-full object-cover transition-all duration-700',
-            loaded ? 'opacity-100 blur-0' : 'opacity-0 blur-md',
+            // Opacity-only reveal: the old blur-up animated `filter`, which
+            // Lighthouse flags ("filter-related property may move pixels").
+            'h-full w-full object-cover transition-opacity duration-700',
+            loaded ? 'opacity-100' : 'opacity-0',
             zoom && 'group-hover:scale-105',
             className,
           )}

@@ -54,10 +54,24 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'query-vendor': ['@tanstack/react-query', 'axios'],
-          'motion-vendor': ['framer-motion'],
+        // Function form: the array form only matched each package's root
+        // module, so react-dom/client's implementation (~173KB) leaked into
+        // the entry chunk instead of react-vendor.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (
+            id.includes('/react-dom/') ||
+            id.includes('/react/') ||
+            id.includes('/scheduler/') ||
+            id.includes('/react-router')
+          ) {
+            return 'react-vendor';
+          }
+          if (id.includes('/@tanstack/') || id.includes('/axios/')) return 'query-vendor';
+          if (id.includes('/framer-motion/') || id.includes('/motion-dom/') || id.includes('/motion-utils/')) {
+            return 'motion-vendor';
+          }
+          return undefined;
         },
       },
     },

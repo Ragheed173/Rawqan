@@ -29,7 +29,10 @@ export function Navbar() {
       className={cn(
         // CSS entrance (transform-only) instead of framer-motion: keeps the
         // motion bundle out of the first paint and avoids forced reflows.
-        'animate-nav-drop fixed inset-x-0 top-0 z-50 transition-all duration-300',
+        // Explicit transition properties: `transition-all` also animated
+        // backdrop-filter when `scrolled` toggles (Lighthouse: "filter-related
+        // property may move pixels"). Blur now snaps; colors/shadow animate.
+        'animate-nav-drop fixed inset-x-0 top-0 z-50 transition-[background-color,border-color,box-shadow,color] duration-300',
         scrolled
           ? 'bg-background/85 backdrop-blur-lg shadow-soft border-b border-border'
           : 'bg-transparent',

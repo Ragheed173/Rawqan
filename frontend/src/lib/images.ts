@@ -20,9 +20,9 @@ function isUnsplash(url: string): boolean {
 
 /**
  * Compression profile. `default` = balanced quality for content images.
- * `hero` = more aggressive (Cloudinary `q_auto:eco`, Unsplash `q=55`) for the
+ * `hero` = aggressive (Cloudinary `q_auto:low`, Unsplash `q=35`) for the
  * full-bleed cover: behind a dark 50-80% overlay the difference is invisible,
- * but it cuts the LCP payload roughly in half (~210KB → ~110-130KB).
+ * and it cuts the LCP payload to a fraction of the original.
  */
 export type ImageQuality = 'default' | 'hero';
 
@@ -31,7 +31,7 @@ export function optimizedImageUrl(url: string, width: number, quality: ImageQual
   if (isCloudinary(url)) {
     // Insert a transformation segment right after `/image/upload/`.
     // `c_limit` never upscales; `f_auto,q_auto[:eco]` serve AVIF/WebP.
-    const q = quality === 'hero' ? 'q_auto:eco' : 'q_auto';
+    const q = quality === 'hero' ? 'q_auto:low' : 'q_auto';
     return url.replace(CLOUDINARY_UPLOAD_SEGMENT, `$1f_auto,${q},c_limit,w_${width}/`);
   }
   if (isUnsplash(url)) {
@@ -39,7 +39,7 @@ export function optimizedImageUrl(url: string, width: number, quality: ImageQual
     u.searchParams.set('auto', 'format');
     u.searchParams.set('fit', 'crop');
     u.searchParams.set('w', String(width));
-    u.searchParams.set('q', quality === 'hero' ? '55' : '70');
+    u.searchParams.set('q', quality === 'hero' ? '35' : '70');
     return u.toString();
   }
   return url;

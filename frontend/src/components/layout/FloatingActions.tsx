@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { Phone, QrCode, X } from 'lucide-react';
 import { useSettings } from '@/hooks/useMenu';
 import { telHref, whatsappHref } from '@/lib/contact';
@@ -29,14 +28,8 @@ export function FloatingActions() {
 
   return (
     <div className="fixed bottom-5 left-5 z-40 flex flex-col items-start gap-3">
-      <AnimatePresence>
-        {qrOpen && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 10 }}
-            className="rounded-2xl border border-border bg-card p-3 shadow-card"
-          >
+      {qrOpen && (
+        <div className="animate-pop-in rounded-2xl border border-border bg-card p-3 shadow-card">
             <div className="mb-2 flex items-center justify-between gap-6">
               <span className="text-xs font-medium text-muted-foreground">امسح القائمة</span>
               <button onClick={() => setQrOpen(false)} aria-label="إغلاق">
@@ -49,9 +42,8 @@ export function FloatingActions() {
               className="h-40 w-40 rounded-lg"
               loading="lazy"
             />
-          </motion.div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
 
       <div className="flex flex-col gap-3">
         <button
