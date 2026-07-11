@@ -34,4 +34,15 @@ EXPOSE 4000
 USER node
 
 # Apply migrations (prisma CLI resolves to the hoisted root node_modules), then boot.
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
+# Retried with backoff: serverless Postgres (Neon) suspends idle compute and a
+# cold connect can exceed Prisma's connect timeout (P1001) — the first failed
+# attempt itself triggers the wake-up, so a retry ~10s later succeeds.
+CMD ["sh", "-c", "\
+  ok=0; \
+  for i in 1 2 3 4 5; do \
+    npx prisma migrate deploy && ok=1 && break; \
+    echo \"migrate deploy failed (attempt $i/5) — waiting for database to wake…\"; \
+    sleep 10; \
+  done; \
+  [ \"$ok\" = 1 ] || { echo 'migrations could not be applied — aborting boot'; exit 1; }; \
+  node dist/server.js"]
