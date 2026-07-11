@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { Menu, X } from 'lucide-react';
 import { Logo } from '@/components/shared/Logo';
 import { Button } from '@/components/ui/button';
@@ -26,12 +25,11 @@ export function Navbar() {
   }, []);
 
   return (
-    <motion.header
-      initial={{ y: -80 }}
-      animate={{ y: 0 }}
-      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+    <header
       className={cn(
-        'fixed inset-x-0 top-0 z-50 transition-all duration-300',
+        // CSS entrance (transform-only) instead of framer-motion: keeps the
+        // motion bundle out of the first paint and avoids forced reflows.
+        'animate-nav-drop fixed inset-x-0 top-0 z-50 transition-all duration-300',
         scrolled
           ? 'bg-background/85 backdrop-blur-lg shadow-soft border-b border-border'
           : 'bg-transparent',
@@ -84,11 +82,7 @@ export function Navbar() {
 
       {/* Mobile menu */}
       {open && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          className="border-t border-border bg-background/95 backdrop-blur-lg md:hidden"
-        >
+        <div className="animate-menu-in border-t border-border bg-background/95 backdrop-blur-lg md:hidden">
           <div className="container flex flex-col gap-1 py-4">
             {links.map((l) => (
               <NavLink
@@ -109,8 +103,8 @@ export function Navbar() {
               <Link to="/menu">تصفّح القائمة</Link>
             </Button>
           </div>
-        </motion.div>
+        </div>
       )}
-    </motion.header>
+    </header>
   );
 }

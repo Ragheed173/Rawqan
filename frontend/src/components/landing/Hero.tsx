@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
-import { motion, useScroll, useTransform } from 'framer-motion';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { ChevronDown, Clock, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/shared/Logo';
@@ -17,72 +16,101 @@ interface HeroProps {
   settingsPending?: boolean;
 }
 
-/** Full-bleed parallax hero with overlay, logo, name, tagline, CTAs, scroll cue. */
+/**
+ * Full-bleed parallax hero with overlay, logo, name, tagline, CTAs, scroll cue.
+ *
+ * Perf (LCP): no framer-motion here. Entrance animations are pure CSS
+ * (transform/opacity keyframes) and the scroll parallax is a passive
+ * rAF-throttled listener that only WRITES `transform`/`opacity`. Nothing reads
+ * element geometry (offsetWidth/clientHeight/getBoundingClientRect), so first
+ * paint never forces a synchronous layout.
+ */
 export function Hero({ settings, settingsPending = false }: HeroProps) {
-  const ref = useRef<HTMLElement>(null);
-  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] });
-  const y = useTransform(scrollYProgress, [0, 1], ['0%', '30%']);
-  const opacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
+  const bgRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const cueRef = useRef<HTMLAnchorElement>(null);
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    // Hero height is 100svh with a 600px floor — mirror that without touching
+    // element geometry (window.innerHeight never forces document layout).
+    let heroH = Math.max(window.innerHeight, 600);
+    let raf = 0;
+
+    const update = () => {
+      raf = 0;
+      const progress = Math.min(Math.max(window.scrollY / heroH, 0), 1);
+      const fade = String(Math.max(1 - progress / 0.8, 0));
+      if (bgRef.current) bgRef.current.style.transform = `translate3d(0, ${progress * 30}%, 0)`;
+      if (contentRef.current) contentRef.current.style.opacity = fade;
+      if (cueRef.current) cueRef.current.style.opacity = fade;
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(update);
+    };
+    const onResize = () => {
+      heroH = Math.max(window.innerHeight, 600);
+      onScroll();
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onResize);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onResize);
+    };
+  }, []);
 
   const cover = settings?.coverUrl ?? FALLBACK_COVER;
 
   return (
-    <section ref={ref} className="relative flex h-[100svh] min-h-[600px] items-center justify-center overflow-hidden">
-      {/* Parallax background */}
-      <motion.div style={{ y }} className="absolute inset-0 -z-10 bg-neutral-900">
+    <section className="relative flex h-[100svh] min-h-[600px] items-center justify-center overflow-hidden">
+      {/* Parallax background (transform-only, driven by the rAF listener) */}
+      <div ref={bgRef} className="absolute inset-0 -z-10 bg-neutral-900 will-change-transform">
         {!settingsPending && (
           <img
-            src={optimizedImageUrl(cover, 1280)}
-            srcSet={imageSrcSet(cover, HERO_IMAGE_WIDTHS)}
+            src={optimizedImageUrl(cover, 1280, 'hero')}
+            srcSet={imageSrcSet(cover, HERO_IMAGE_WIDTHS, 'hero')}
             sizes="100vw"
             alt=""
             width={1280}
             height={853}
             className="h-[120%] w-full object-cover"
             loading="eager"
+            decoding="async"
             fetchPriority="high"
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80" />
-      </motion.div>
+      </div>
 
       {/* Content */}
-      <motion.div style={{ opacity }} className="container flex flex-col items-center text-center text-white">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-        >
+      <div ref={contentRef} className="container flex flex-col items-center text-center text-white">
+        <div className="animate-scale-in">
           {settings?.isOpen != null && (
             <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-xs font-medium backdrop-blur">
               <span className={`h-2 w-2 rounded-full ${settings.isOpen ? 'bg-emerald-400' : 'bg-red-400'}`} />
               {settings.isOpen ? 'مفتوح الآن' : 'مغلق حالياً'}
             </span>
           )}
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.1 }}
-        >
+        <div className="animate-fade-up" style={{ animationDelay: '0.1s' }}>
           <Logo name={settings?.name} logoUrl={settings?.logoUrl} className="text-5xl text-white md:text-7xl" imgClassName="h-24 md:h-32 mx-auto" />
-        </motion.div>
+        </div>
 
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.25 }}
-          className="mt-5 max-w-2xl text-balance text-lg font-light text-white/85 md:text-2xl"
+        <p
+          className="animate-fade-up mt-5 max-w-2xl text-balance text-lg font-light text-white/85 md:text-2xl"
+          style={{ animationDelay: '0.25s' }}
         >
           {settings?.tagline ?? 'تجربة طعام فاخرة في أجواء استثنائية'}
-        </motion.p>
+        </p>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.4 }}
-          className="mt-9 flex flex-col items-center gap-4 sm:flex-row"
+        <div
+          className="animate-fade-up mt-9 flex flex-col items-center gap-4 sm:flex-row"
+          style={{ animationDelay: '0.4s' }}
         >
           <Button asChild variant="gold" size="lg" className="min-w-[200px]">
             <Link to="/menu">تصفّح القائمة</Link>
@@ -98,20 +126,18 @@ export function Hero({ settings, settingsPending = false }: HeroProps) {
               {settings?.isOpen ? 'نستقبلكم الآن' : 'تحقق من ساعات العمل'}
             </span>
           </div>
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
 
       {/* Scroll indicator */}
-      <motion.a
+      <a
+        ref={cueRef}
         href="#featured"
         aria-label="مرّر للأسفل"
-        style={{ opacity }}
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/70"
-        animate={{ y: [0, 10, 0] }}
-        transition={{ duration: 1.8, repeat: Infinity }}
+        className="animate-cue-bob absolute bottom-8 left-1/2 text-white/70"
       >
         <ChevronDown className="h-7 w-7" />
-      </motion.a>
+      </a>
     </section>
   );
 }

@@ -133,6 +133,75 @@
   .text-balance {
     text-wrap: balance;
   }
+
+  /* ─── Above-the-fold entrance animations (perf) ──────────────
+     Pure CSS replacements for the framer-motion hero/navbar animations.
+     Transform/opacity only — compositor-friendly, no layout, no JS on the
+     critical path. Visuals match the previous motion variants 1:1. */
+  .animate-fade-up {
+    animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .animate-scale-in {
+    animation: scale-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .animate-nav-drop {
+    animation: nav-drop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .animate-menu-in {
+    animation: menu-in 0.25s ease-out both;
+  }
+  .animate-cue-bob {
+    transform: translateX(-50%);
+    animation: cue-bob 1.8s ease-in-out infinite;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes nav-drop {
+  from {
+    transform: translateY(-80px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes cue-bob {
+  0%,
+  100% {
+    transform: translate(-50%, 0);
+  }
+  50% {
+    transform: translate(-50%, 10px);
+  }
 }
 
 @layer utilities {

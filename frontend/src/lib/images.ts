@@ -18,19 +18,28 @@ function isUnsplash(url: string): boolean {
   return url.includes('images.unsplash.com');
 }
 
+/**
+ * Compression profile. `default` = balanced quality for content images.
+ * `hero` = more aggressive (Cloudinary `q_auto:eco`, Unsplash `q=55`) for the
+ * full-bleed cover: behind a dark 50-80% overlay the difference is invisible,
+ * but it cuts the LCP payload roughly in half (~210KB → ~110-130KB).
+ */
+export type ImageQuality = 'default' | 'hero';
+
 /** Returns `url` resized to `width` CSS px (capped upscale) when the CDN supports it. */
-export function optimizedImageUrl(url: string, width: number): string {
+export function optimizedImageUrl(url: string, width: number, quality: ImageQuality = 'default'): string {
   if (isCloudinary(url)) {
     // Insert a transformation segment right after `/image/upload/`.
-    // `c_limit` never upscales; `f_auto,q_auto` serve AVIF/WebP at auto quality.
-    return url.replace(CLOUDINARY_UPLOAD_SEGMENT, `$1f_auto,q_auto,c_limit,w_${width}/`);
+    // `c_limit` never upscales; `f_auto,q_auto[:eco]` serve AVIF/WebP.
+    const q = quality === 'hero' ? 'q_auto:eco' : 'q_auto';
+    return url.replace(CLOUDINARY_UPLOAD_SEGMENT, `$1f_auto,${q},c_limit,w_${width}/`);
   }
   if (isUnsplash(url)) {
     const u = new URL(url);
     u.searchParams.set('auto', 'format');
     u.searchParams.set('fit', 'crop');
     u.searchParams.set('w', String(width));
-    u.searchParams.set('q', '70');
+    u.searchParams.set('q', quality === 'hero' ? '55' : '70');
     return u.toString();
   }
   return url;
@@ -46,7 +55,11 @@ export const HERO_IMAGE_WIDTHS = [640, 960, 1280, 1920] as const;
  * Builds a `srcset` for CDN-resizable URLs. Returns `undefined` for
  * non-resizable sources (uploads served elsewhere keep their single URL).
  */
-export function imageSrcSet(url: string, widths: readonly number[] = DEFAULT_IMAGE_WIDTHS): string | undefined {
+export function imageSrcSet(
+  url: string,
+  widths: readonly number[] = DEFAULT_IMAGE_WIDTHS,
+  quality: ImageQuality = 'default',
+): string | undefined {
   if (!isCloudinary(url) && !isUnsplash(url)) return undefined;
-  return widths.map((w) => `${optimizedImageUrl(url, w)} ${w}w`).join(', ');
+  return widths.map((w) => `${optimizedImageUrl(url, w, quality)} ${w}w`).join(', ');
 }

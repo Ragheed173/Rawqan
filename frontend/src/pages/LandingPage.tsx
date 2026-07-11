@@ -1,9 +1,18 @@
+import { Suspense, lazy } from 'react';
 import { Seo } from '@/components/shared/Seo';
 import { Hero } from '@/components/landing/Hero';
-import { FeaturedDishes } from '@/components/landing/FeaturedDishes';
-import { InfoSection } from '@/components/landing/InfoSection';
 import { useSettings } from '@/hooks/useMenu';
 import { config } from '@/config/env';
+
+// Below-the-fold sections (perf): the hero fills 100svh, so these are never
+// visible at first paint. Lazy-loading them keeps framer-motion (used by
+// MenuCard/SectionHeading/InfoSection) out of the initial bundle entirely.
+const FeaturedDishes = lazy(() =>
+  import('@/components/landing/FeaturedDishes').then((m) => ({ default: m.FeaturedDishes })),
+);
+const InfoSection = lazy(() =>
+  import('@/components/landing/InfoSection').then((m) => ({ default: m.InfoSection })),
+);
 
 export default function LandingPage() {
   const { data: settings, isPending } = useSettings();
@@ -33,8 +42,10 @@ export default function LandingPage() {
         jsonLd={jsonLd}
       />
       <Hero settings={settings} settingsPending={isPending} />
-      <FeaturedDishes currency={settings?.currency} />
-      <InfoSection settings={settings} />
+      <Suspense fallback={null}>
+        <FeaturedDishes currency={settings?.currency} />
+        <InfoSection settings={settings} />
+      </Suspense>
     </>
   );
 }

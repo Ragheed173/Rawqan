@@ -1,15 +1,26 @@
 import { lazy, Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Navbar } from '@/components/layout/Navbar';
-import { Footer } from '@/components/layout/Footer';
-import { FloatingActions } from '@/components/layout/FloatingActions';
-import { InstallPrompt } from '@/components/shared/InstallPrompt';
-import { AnalyticsTracker } from '@/components/shared/AnalyticsTracker';
 import { PageLoader } from '@/components/shared/PageLoader';
 import { useSettings } from '@/hooks/useMenu';
 
 const MaintenancePage = lazy(() => import('@/pages/MaintenancePage'));
 const ComingSoonPage = lazy(() => import('@/pages/ComingSoonPage'));
+
+// Below-the-fold / non-critical shell pieces (perf): none of these are
+// visible or interactive at first paint, and FloatingActions + InstallPrompt
+// pull in framer-motion. Lazy-loading them (and analytics) keeps the initial
+// bundle down to navbar + hero + CTA.
+const Footer = lazy(() => import('@/components/layout/Footer').then((m) => ({ default: m.Footer })));
+const FloatingActions = lazy(() =>
+  import('@/components/layout/FloatingActions').then((m) => ({ default: m.FloatingActions })),
+);
+const InstallPrompt = lazy(() =>
+  import('@/components/shared/InstallPrompt').then((m) => ({ default: m.InstallPrompt })),
+);
+const AnalyticsTracker = lazy(() =>
+  import('@/components/shared/AnalyticsTracker').then((m) => ({ default: m.AnalyticsTracker })),
+);
 
 /** Public site shell: sticky nav, page outlet, footer, floating actions. */
 export function SiteLayout() {
@@ -33,7 +44,9 @@ export function SiteLayout() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <AnalyticsTracker />
+      <Suspense fallback={null}>
+        <AnalyticsTracker />
+      </Suspense>
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:right-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
@@ -44,9 +57,11 @@ export function SiteLayout() {
       <main id="main" className="flex-1">
         <Outlet />
       </main>
-      <Footer />
-      <FloatingActions />
-      <InstallPrompt />
+      <Suspense fallback={null}>
+        <Footer />
+        <FloatingActions />
+        <InstallPrompt />
+      </Suspense>
     </div>
   );
 }
