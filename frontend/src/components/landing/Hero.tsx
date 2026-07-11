@@ -4,13 +4,21 @@ import { useRef } from 'react';
 import { ChevronDown, Clock, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/shared/Logo';
+import { HERO_IMAGE_WIDTHS, imageSrcSet, optimizedImageUrl } from '@/lib/images';
 import type { RestaurantSettings } from '@/types';
 
 const FALLBACK_COVER =
   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=2000&q=80';
 
+interface HeroProps {
+  settings?: RestaurantSettings;
+  /** True while settings are still loading — delays the cover so we never
+   *  download the fallback image only to swap it for the real cover (LCP). */
+  settingsPending?: boolean;
+}
+
 /** Full-bleed parallax hero with overlay, logo, name, tagline, CTAs, scroll cue. */
-export function Hero({ settings }: { settings?: RestaurantSettings }) {
+export function Hero({ settings, settingsPending = false }: HeroProps) {
   const ref = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] });
   const y = useTransform(scrollYProgress, [0, 1], ['0%', '30%']);
@@ -21,8 +29,20 @@ export function Hero({ settings }: { settings?: RestaurantSettings }) {
   return (
     <section ref={ref} className="relative flex h-[100svh] min-h-[600px] items-center justify-center overflow-hidden">
       {/* Parallax background */}
-      <motion.div style={{ y }} className="absolute inset-0 -z-10">
-        <img src={cover} alt="" className="h-[120%] w-full object-cover" fetchPriority="high" />
+      <motion.div style={{ y }} className="absolute inset-0 -z-10 bg-neutral-900">
+        {!settingsPending && (
+          <img
+            src={optimizedImageUrl(cover, 1280)}
+            srcSet={imageSrcSet(cover, HERO_IMAGE_WIDTHS)}
+            sizes="100vw"
+            alt=""
+            width={1280}
+            height={853}
+            className="h-[120%] w-full object-cover"
+            loading="eager"
+            fetchPriority="high"
+          />
+        )}
         <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80" />
       </motion.div>
 

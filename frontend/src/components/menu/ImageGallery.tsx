@@ -22,7 +22,13 @@ export function ImageGallery({ images, name }: { images: ItemImage[]; name: stri
             transition={{ duration: 0.4 }}
             className="h-full w-full"
           >
-            <LazyImage src={current.url} alt={current.alt ?? name} wrapperClassName="h-full w-full" zoom />
+            <LazyImage
+              src={current.url}
+              alt={current.alt ?? name}
+              wrapperClassName="h-full w-full"
+              sizes="(min-width: 1024px) 50vw, 100vw"
+              zoom
+            />
           </motion.div>
         </AnimatePresence>
       </div>
@@ -40,7 +46,13 @@ export function ImageGallery({ images, name }: { images: ItemImage[]; name: stri
                 i === active ? 'border-accent' : 'border-transparent opacity-70 hover:opacity-100',
               )}
             >
-              <LazyImage src={img.url} alt={img.alt ?? ''} wrapperClassName="h-full w-full" />
+              <LazyImage
+                src={img.url}
+                alt={img.alt ?? ''}
+                wrapperClassName="h-full w-full"
+                widths={[96, 160]}
+                sizes="80px"
+              />
             </button>
           ))}
         </div>

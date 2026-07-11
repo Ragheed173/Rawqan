@@ -13,6 +13,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-sans-arabic": "^5.2.9",
+    "@fontsource/poppins": "^5.2.7",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-dialog": "^1.1.4",
     "@radix-ui/react-dropdown-menu": "^2.1.4",

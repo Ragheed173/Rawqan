@@ -5,6 +5,7 @@ import { Seo } from '@/components/shared/Seo';
 import { WhatsAppIcon } from '@/components/layout/FloatingActions';
 import { useSettings } from '@/hooks/useMenu';
 import { whatsappHref } from '@/lib/contact';
+import { HERO_IMAGE_WIDTHS, imageSrcSet, optimizedImageUrl } from '@/lib/images';
 
 const FALLBACK =
   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=2000&q=80';
@@ -23,7 +24,16 @@ export default function ComingSoonPage() {
       <Seo title="قريباً" />
       <div className="relative grid min-h-screen place-items-center overflow-hidden px-4 text-center text-white">
         <div className="absolute inset-0 -z-10">
-          <img src={settings?.coverUrl ?? FALLBACK} alt="" className="h-full w-full object-cover" />
+          <img
+            src={optimizedImageUrl(settings?.coverUrl ?? FALLBACK, 1280)}
+            srcSet={imageSrcSet(settings?.coverUrl ?? FALLBACK, HERO_IMAGE_WIDTHS)}
+            sizes="100vw"
+            alt=""
+            width={1280}
+            height={853}
+            className="h-full w-full object-cover"
+            fetchPriority="high"
+          />
           <div className="absolute inset-0 bg-black/70" />
         </div>
         <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>

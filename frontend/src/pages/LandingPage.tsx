@@ -6,7 +6,7 @@ import { useSettings } from '@/hooks/useMenu';
 import { config } from '@/config/env';
 
 export default function LandingPage() {
-  const { data: settings } = useSettings();
+  const { data: settings, isPending } = useSettings();
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -32,7 +32,7 @@ export default function LandingPage() {
         type="restaurant.menu"
         jsonLd={jsonLd}
       />
-      <Hero settings={settings} />
+      <Hero settings={settings} settingsPending={isPending} />
       <FeaturedDishes currency={settings?.currency} />
       <InfoSection settings={settings} />
     </>

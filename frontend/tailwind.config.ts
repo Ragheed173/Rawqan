@@ -48,7 +48,7 @@ export default {
         ink: { DEFAULT: '#111111', soft: '#1B1B1B' },
       },
       fontFamily: {
-        sans: ['IBM Plex Sans Arabic', 'Cairo', 'system-ui', 'sans-serif'],
+        sans: ['IBM Plex Sans Arabic', 'system-ui', 'sans-serif'],
         latin: ['Poppins', 'system-ui', 'sans-serif'],
         display: ['Poppins', 'IBM Plex Sans Arabic', 'sans-serif'],
       },

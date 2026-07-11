@@ -66,16 +66,21 @@ export function Footer() {
               <Phone className="h-4 w-4" /> {settings.phone}
             </a>
           )}
-          {settings?.addressLine && (
-            <a
-              href={settings.googleMapsUrl ?? undefined}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-start gap-2 text-sm text-white/70 hover:text-white"
-            >
-              <MapPin className="mt-0.5 h-4 w-4 shrink-0" /> {settings.addressLine}
-            </a>
-          )}
+          {settings?.addressLine &&
+            (settings.googleMapsUrl ? (
+              <a
+                href={settings.googleMapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-start gap-2 text-sm text-white/70 hover:text-white"
+              >
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0" /> {settings.addressLine}
+              </a>
+            ) : (
+              <p className="flex items-start gap-2 text-sm text-white/70">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0" /> {settings.addressLine}
+              </p>
+            ))}
           <Link to="/menu" className="block text-sm text-white/70 hover:text-white">
             تصفّح القائمة
           </Link>

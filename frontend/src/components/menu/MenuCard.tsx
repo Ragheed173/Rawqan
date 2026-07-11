@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
@@ -12,8 +13,9 @@ interface MenuCardProps {
   index?: number;
 }
 
-/** Premium menu item card — image zoom on hover, badges, price with discount. */
-export function MenuCard({ item, currency = 'EGP', index = 0 }: MenuCardProps) {
+/** Premium menu item card — image zoom on hover, badges, price with discount.
+ *  Memoized: MenuPage re-renders on every search keystroke and lists dozens of cards. */
+export const MenuCard = memo(function MenuCard({ item, currency = 'EGP', index = 0 }: MenuCardProps) {
   // Discounts only apply inside their scheduled promo window (Task 22).
   const effectiveDiscount = item.discountActive ? item.discountPrice : null;
   const off = discountPercent(item.price, effectiveDiscount);
@@ -78,4 +80,4 @@ export function MenuCard({ item, currency = 'EGP', index = 0 }: MenuCardProps) {
       </div>
     </motion.article>
   );
-}
+});
