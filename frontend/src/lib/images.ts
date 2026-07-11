@@ -39,7 +39,8 @@ export function optimizedImageUrl(url: string, width: number, quality: ImageQual
     u.searchParams.set('auto', 'format');
     u.searchParams.set('fit', 'crop');
     u.searchParams.set('w', String(width));
-    u.searchParams.set('q', quality === 'hero' ? '35' : '70');
+    // NOTE: hero q value is mirrored by the <link rel="preload"> in index.html.
+    u.searchParams.set('q', quality === 'hero' ? '30' : '70');
     return u.toString();
   }
   return url;

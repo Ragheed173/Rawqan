@@ -30,7 +30,20 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(
     () => (localStorage.getItem(STORAGE_KEY) as Theme) ?? 'system',
   );
-  const [resolved, setResolved] = useState<'light' | 'dark'>(() => apply(theme));
+  // READ-ONLY initializer (perf): the old `() => apply(theme)` mutated <html>
+  // class/style during the first React render, invalidating styles for the
+  // whole document and forcing a reflow inside React's commit (Lighthouse:
+  // "forced reflow"). First-paint theming is handled by the inline script in
+  // index.html; this initializer only computes state.
+  const [resolved, setResolved] = useState<'light' | 'dark'>(() =>
+    theme === 'system' ? (systemPrefersDark() ? 'dark' : 'light') : theme,
+  );
+
+  // Reconcile the DOM after paint (no-op when the inline script already
+  // applied the same theme; keeps tests and other entry points correct).
+  useEffect(() => {
+    setResolved(apply(theme));
+  }, []); // mount-only by design: later changes go through setTheme / the mq listener
 
   const setTheme = useCallback((t: Theme) => {
     localStorage.setItem(STORAGE_KEY, t);

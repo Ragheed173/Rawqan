@@ -30,22 +30,20 @@ import './index.css';
 installGlobalErrorHandlers();
 registerServiceWorker();
 
-// sonner is ~32KB of the entry and no toast can appear at first paint, so
-// mount the Toaster after first idle (or interaction) instead of eagerly.
+// sonner is ~32KB and every toast() caller in the app is behind user
+// interaction (all in admin flows), so mount the Toaster on first
+// interaction only. This keeps sonner — and its toast-height measurements
+// (forced reflow) — completely out of the initial trace.
 const Toaster = lazy(() => import('sonner').then((m) => ({ default: m.Toaster })));
 
 function DeferredToaster() {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     const reveal = () => setReady(true);
-    const events: (keyof WindowEventMap)[] = ['pointerdown', 'keydown', 'touchstart'];
+    const events: (keyof WindowEventMap)[] = ['pointerdown', 'keydown', 'touchstart', 'scroll', 'wheel'];
     events.forEach((e) => window.addEventListener(e, reveal, { passive: true, once: true }));
-    const hasIdle = typeof requestIdleCallback === 'function';
-    const idle = hasIdle ? requestIdleCallback(reveal, { timeout: 3000 }) : setTimeout(reveal, 2500);
     return () => {
       events.forEach((e) => window.removeEventListener(e, reveal));
-      if (hasIdle) cancelIdleCallback(idle as number);
-      else clearTimeout(idle);
     };
   }, []);
   if (!ready) return null;

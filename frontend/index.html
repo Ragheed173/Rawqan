@@ -13,10 +13,41 @@
     <title>روقان | Rawaqan — قائمة الطعام</title>
     <meta name="description" content="روقان — تجربة طعام فاخرة. تصفّح قائمتنا الرقمية الأنيقة." />
 
+    <!-- First-paint theming (perf): applying the persisted theme here means
+         React never mutates <html> during its initial render (which forced a
+         document-wide reflow) and dark-mode users get no light flash. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('rawaqan-theme') || 'system';
+          var d = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+          var e = document.documentElement;
+          e.classList.toggle('dark', d);
+          e.style.colorScheme = d ? 'dark' : 'light';
+        } catch (e) {}
+      })();
+    </script>
+
     <!-- Fonts are self-hosted (@fontsource) and bundled with the app CSS:
          no render-blocking third-party stylesheet, no extra origins. -->
-    <link rel="preconnect" href="https://res.cloudinary.com" />
     <link rel="preconnect" href="https://images.unsplash.com" />
+
+    <!-- Hero cover preload (perf/LCP): starts the image during HTML parse
+         instead of after React boots (~370ms saved). URLs must exactly match
+         what <Hero> renders (see FALLBACK_COVER + optimizedImageUrl, q=30).
+         NOTE: if a custom coverUrl is configured in admin settings, update or
+         remove this preload — it would then fetch one unused image. -->
+    <link
+      rel="preload"
+      as="image"
+      fetchpriority="high"
+      imagesizes="100vw"
+      imagesrcset="
+        https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=640&q=30 640w,
+        https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=960&q=30 960w,
+        https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1280&q=30 1280w,
+        https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1920&q=30 1920w"
+    />
 
     <!-- Open Graph -->
     <meta property="og:type" content="restaurant.menu" />
