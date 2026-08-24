@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { listItemsQuerySchema } from "../src/modules/menu/item.schemas.js";
+import {
+  createItemSchema,
+  listItemsQuerySchema,
+  updateItemSchema,
+} from "../src/modules/menu/item.schemas.js";
 import { updateSettingsSchema } from "../src/modules/settings/settings.schemas.js";
 import { finalizeBody, paymentBody } from "../src/modules/pos/pos.schemas.js";
 
@@ -19,6 +23,22 @@ describe("POS payment schemas — cash-only policy", () => {
       expectedVersion: 1,
       payments: [{ method: "VISA", amountMinor: "1497" }],
     })).toThrow();
+  });
+});
+
+describe("menu item schemas — whole-shekel pricing", () => {
+  const item = {
+    categoryId: "cm0rawaqan000000000000001",
+    name: "لاتيه روقان",
+    price: 15,
+    discountPrice: 10,
+  };
+
+  it("accepts whole prices and rejects fractional base or discount prices", () => {
+    expect(createItemSchema.parse(item)).toMatchObject(item);
+    expect(() => createItemSchema.parse({ ...item, price: 14.97 })).toThrow();
+    expect(() => createItemSchema.parse({ ...item, discountPrice: 9.5 })).toThrow();
+    expect(() => updateItemSchema.parse({ price: 88.25 })).toThrow();
   });
 });
 

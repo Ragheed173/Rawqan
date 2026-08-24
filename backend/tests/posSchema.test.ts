@@ -12,6 +12,13 @@ const migration = readFileSync(
   ),
   "utf8",
 );
+const wholeShekelMigration = readFileSync(
+  new URL(
+    "../prisma/migrations/7_whole_shekel_catalog_prices/migration.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 const POS_MODELS = [
   "PosDevice",
@@ -101,6 +108,15 @@ describe("Phase 2 POS schema foundation", () => {
     expect(model("ModifierOption")).toMatch(
       /price\s+Decimal\s+@default\(0\)\s+@db\.Decimal\(10, 2\)/,
     );
+  });
+
+  it("normalizes and protects whole-shekel catalog prices without rewriting financial snapshots", () => {
+    expect(wholeShekelMigration).toContain('ROUND("price", 0)');
+    expect(wholeShekelMigration).toContain("menu_items_price_whole_shekel_check");
+    expect(wholeShekelMigration).toContain("menu_items_discount_price_whole_shekel_check");
+    expect(wholeShekelMigration).toContain("modifier_options_price_whole_shekel_check");
+    expect(wholeShekelMigration).toContain("WHOLE_SHEKEL_PRICE_MIGRATION");
+    expect(wholeShekelMigration).not.toMatch(/UPDATE\s+"(?:orders|order_items|invoices|invoice_lines)"/i);
   });
 
   it("includes optimistic versions, snapshot fields, and safe nullable catalog/user links", () => {

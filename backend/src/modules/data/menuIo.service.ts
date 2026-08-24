@@ -138,8 +138,19 @@ export async function importBuffer(buffer: Buffer): Promise<ImportResult> {
       result.errors.push(`السطر ${r}: القسم والاسم مطلوبان`);
       continue;
     }
-    if (!Number.isFinite(price) || price < 0) {
-      result.errors.push(`السطر ${r}: سعر غير صالح`);
+    if (!Number.isInteger(price) || price < 0) {
+      result.errors.push(`السطر ${r}: السعر يجب أن يكون عدداً صحيحاً بدون أعشار`);
+      continue;
+    }
+
+    const discountRaw = get(row, 'DiscountPrice').trim();
+    const discountPrice = discountRaw ? Number(discountRaw) : null;
+    if (discountPrice != null && (!Number.isInteger(discountPrice) || discountPrice < 0)) {
+      result.errors.push(`السطر ${r}: سعر الخصم يجب أن يكون عدداً صحيحاً بدون أعشار`);
+      continue;
+    }
+    if (discountPrice != null && discountPrice >= price) {
+      result.errors.push(`السطر ${r}: سعر الخصم يجب أن يكون أقل من السعر`);
       continue;
     }
 
@@ -170,7 +181,6 @@ export async function importBuffer(buffer: Buffer): Promise<ImportResult> {
         categoryCache.set(categoryName, categoryId);
       }
 
-      const discountRaw = get(row, 'DiscountPrice').trim();
       const caloriesRaw = get(row, 'Calories').trim();
       const data = {
         name,
@@ -178,7 +188,7 @@ export async function importBuffer(buffer: Buffer): Promise<ImportResult> {
         description: get(row, 'Description') || null,
         ingredients: get(row, 'Ingredients') || null,
         price,
-        discountPrice: discountRaw ? Number(discountRaw) : null,
+        discountPrice,
         calories: caloriesRaw ? Number(caloriesRaw) : null,
         allergens: get(row, 'Allergens') || null,
         spiceLevel: spice(get(row, 'SpiceLevel')),

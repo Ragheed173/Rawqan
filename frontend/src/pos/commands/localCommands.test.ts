@@ -525,7 +525,7 @@ describe("local-first POS commands", () => {
     });
     expect(html).toContain("برغر طويل الاسم");
     expect(html).toContain("جبنة إضافية");
-    expect(html).toContain("الباقي: 5.00 ₪");
+    expect(html).toContain("الباقي: 5 ₪");
     expect(html).toContain("نسخة معاد طباعتها");
   });
 

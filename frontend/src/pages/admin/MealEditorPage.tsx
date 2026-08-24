@@ -22,6 +22,11 @@ import { adminItemService, type ItemInput } from '@/services/admin/admin.service
 import { getApiErrorMessage } from '@/lib/apiClient';
 import { cn } from '@/lib/utils';
 
+const wholePrice = z.coerce
+  .number()
+  .int('السعر يجب أن يكون بدون أعشار')
+  .nonnegative('سعر غير صالح');
+
 const schema = z
   .object({
     categoryId: z.string().min(1, 'اختر قسماً'),
@@ -29,8 +34,8 @@ const schema = z
     nameEn: z.string().max(160).optional(),
     description: z.string().max(2000).optional(),
     ingredients: z.string().max(2000).optional(),
-    price: z.coerce.number().nonnegative('سعر غير صالح'),
-    discountPrice: z.union([z.coerce.number().nonnegative(), z.literal('')]).optional(),
+    price: wholePrice,
+    discountPrice: z.union([wholePrice, z.literal('')]).optional(),
     calories: z.union([z.coerce.number().int().nonnegative(), z.literal('')]).optional(),
     allergens: z.string().max(500).optional(),
     spiceLevel: z.enum(['NONE', 'MILD', 'MEDIUM', 'HOT']),
@@ -252,12 +257,12 @@ export default function MealEditorPage() {
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="price">السعر</Label>
-                <Input id="price" type="number" step="0.01" {...register('price')} aria-invalid={!!errors.price} />
+                <Input id="price" type="number" step="1" {...register('price')} aria-invalid={!!errors.price} />
                 {errors.price && <p className="text-xs text-destructive">{errors.price.message}</p>}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="discountPrice">سعر الخصم</Label>
-                <Input id="discountPrice" type="number" step="0.01" {...register('discountPrice')} />
+                <Input id="discountPrice" type="number" step="1" {...register('discountPrice')} />
                 {errors.discountPrice && <p className="text-xs text-destructive">{errors.discountPrice.message}</p>}
               </div>
               <div className="space-y-2">

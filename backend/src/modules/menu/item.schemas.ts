@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 const spice = z.enum(['NONE', 'MILD', 'MEDIUM', 'HOT']);
+const wholePrice = z.number().int().nonnegative();
 
 export const createItemSchema = z.object({
   categoryId: z.string().cuid(),
@@ -9,8 +10,8 @@ export const createItemSchema = z.object({
   description: z.string().max(2000).optional().nullable(),
   descriptionEn: z.string().max(2000).optional().nullable(),
   ingredients: z.string().max(2000).optional().nullable(),
-  price: z.number().nonnegative(),
-  discountPrice: z.number().nonnegative().optional().nullable(),
+  price: wholePrice,
+  discountPrice: wholePrice.optional().nullable(),
   calories: z.number().int().nonnegative().optional().nullable(),
   allergens: z.string().max(500).optional().nullable(),
   spiceLevel: spice.optional(),
@@ -41,8 +42,8 @@ export const updateItemSchema = z
     description: z.string().max(2000).optional().nullable(),
     descriptionEn: z.string().max(2000).optional().nullable(),
     ingredients: z.string().max(2000).optional().nullable(),
-    price: z.number().nonnegative().optional(),
-    discountPrice: z.number().nonnegative().optional().nullable(),
+    price: wholePrice.optional(),
+    discountPrice: wholePrice.optional().nullable(),
     calories: z.number().int().nonnegative().optional().nullable(),
     allergens: z.string().max(500).optional().nullable(),
     spiceLevel: spice.optional(),

@@ -33,7 +33,7 @@ const optionBody = z.object({
   name: z.string().trim().min(1).max(100),
   nameEn: z.string().trim().max(100).nullable().optional(),
   priceType: z.enum(["DELTA", "REPLACEMENT"]).optional(),
-  price: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+  price: z.string().regex(/^\d+$/, "Price must be a whole shekel amount").optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
 });

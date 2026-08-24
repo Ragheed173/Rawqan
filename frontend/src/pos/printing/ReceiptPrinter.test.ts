@@ -92,8 +92,8 @@ describe("receipt renderer", () => {
       expect(html).toContain("الحجم");
       expect(html).toContain("نقدي");
       expect(html).toContain("Visa");
-      expect(html).toContain("المستلم: 100.00 ₪");
-      expect(html).toContain("الباقي: 30.00 ₪");
+      expect(html).toContain("المستلم: 100 ₪");
+      expect(html).toContain("الباقي: 30 ₪");
       expect((html.match(/class="row line"/g) ?? []).length).toBe(22);
       expect(html).toContain("overflow-wrap:anywhere");
       expect(html).toContain("break-inside:avoid");
