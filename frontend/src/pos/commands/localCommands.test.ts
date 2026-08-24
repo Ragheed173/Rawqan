@@ -234,7 +234,8 @@ describe("local-first POS commands", () => {
       .filter(
         (row) =>
           row.operationType === "CREATE_PAYMENT" &&
-          row.payload.method === "CASH",
+          row.payload.method === "CASH" &&
+          row.payload.invoiceId === result.invoices[0]!.id,
       )
       .first();
     expect(operation?.payload).toMatchObject({

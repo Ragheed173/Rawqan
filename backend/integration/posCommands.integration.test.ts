@@ -150,7 +150,7 @@ describe("transactional POS commands on PostgreSQL", () => {
   });
 
   it("syncs a split sibling payment with distinct invoice and payment identifiers", async () => {
-    const { orderId } = await orderWithCustomItem(1, "30.00"); const split = await finalizeEqualSplit({ orderId, expectedVersion: 2, splitCount: 2 }, fixture); const operationId = randomUUID(); const paymentId = randomUUID(); const payload = { invoiceId: split.invoices[0]!.id, id: paymentId, method: "VISA", amountMinor: "1500" }; const dependencies: string[] = []; const requestHash = hashOperationRequest({ operationType: "CREATE_PAYMENT", payload, dependencies });
+    const { orderId } = await orderWithCustomItem(1, "30.00"); const split = await finalizeEqualSplit({ orderId, expectedVersion: 2, splitCount: 2 }, fixture); const operationId = randomUUID(); const paymentId = randomUUID(); const payload = { invoiceId: split.invoices[0]!.id, id: paymentId, method: "CASH", amountMinor: "1500", tenderedMinor: "1500" }; const dependencies: string[] = []; const requestHash = hashOperationRequest({ operationType: "CREATE_PAYMENT", payload, dependencies });
     await pushOperations(fixture.actorId, fixture.deviceId, [{ operationId, localSequence: 980_000n + BigInt(Math.floor(Math.random() * 10_000)), requestHash, operationType: "CREATE_PAYMENT", payload, dependencies }]);
     const payment = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } }); expect(payment.invoiceId).toBe(split.invoices[0]!.id); expect(payment.amountMinor).toBe(1500n);
   });
