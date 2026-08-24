@@ -130,33 +130,82 @@ export default function DiagnosticsPage() {
   const capabilityExpired = Boolean(
     session?.expiresAt && new Date(session.expiresAt) <= new Date(),
   );
-  const rows = [
-    ["حالة الشبكة", navigator.onLine ? "واجهة الشبكة متصلة" : "دون اتصال"],
-    ["الخادم", backend == null ? "جارٍ الفحص" : backend ? "متاح" : "غير متاح"],
-    [
-      "آخر مزامنة ناجحة",
-      state?.lastSuccessfulSync
+  type Tone = "neutral" | "good" | "warn" | "danger";
+  const rows: { label: string; value: string; tone: Tone }[] = [
+    {
+      label: "حالة الشبكة",
+      value: navigator.onLine ? "واجهة الشبكة متصلة" : "دون اتصال",
+      tone: navigator.onLine ? "good" : "danger",
+    },
+    {
+      label: "الخادم",
+      value: backend == null ? "جارٍ الفحص" : backend ? "متاح" : "غير متاح",
+      tone: backend == null ? "neutral" : backend ? "good" : "danger",
+    },
+    {
+      label: "آخر مزامنة ناجحة",
+      value: state?.lastSuccessfulSync
         ? new Date(state.lastSuccessfulSync).toLocaleString("ar")
         : "لا توجد",
-    ],
-    ["عمليات معلقة", String(pending)],
-    ["عمليات فاشلة قابلة للمحاولة", String(failed)],
-    ["تعارضات تحتاج مراجعة", String(conflicts)],
-    ["IndexedDB", storage.available ? "متاح وقابل للكتابة" : "غير متاح"],
-    ["التخزين الدائم", persistenceLabels[persistenceStatus(storage)]],
-    ["الاستخدام / الحصة", `${bytes(storage.usage)} / ${bytes(storage.quota)}`],
-    ["الجهاز", state?.deviceCode ?? "غير مقترن"],
-    [
-      "انتهاء صلاحية العمل دون اتصال",
-      session?.expiresAt
+      tone: state?.lastSuccessfulSync ? "good" : "neutral",
+    },
+    {
+      label: "عمليات معلقة",
+      value: String(pending),
+      tone: pending > 0 ? "warn" : "neutral",
+    },
+    {
+      label: "عمليات فاشلة قابلة للمحاولة",
+      value: String(failed),
+      tone: failed > 0 ? "danger" : "neutral",
+    },
+    {
+      label: "تعارضات تحتاج مراجعة",
+      value: String(conflicts),
+      tone: conflicts > 0 ? "danger" : "neutral",
+    },
+    {
+      label: "IndexedDB",
+      value: storage.available ? "متاح وقابل للكتابة" : "غير متاح",
+      tone: storage.available ? "good" : "danger",
+    },
+    {
+      label: "التخزين الدائم",
+      value: persistenceLabels[persistenceStatus(storage)],
+      tone:
+        storage.persistent === true
+          ? "good"
+          : storage.persistent === false
+            ? "warn"
+            : "neutral",
+    },
+    {
+      label: "الاستخدام / الحصة",
+      value: `${bytes(storage.usage)} / ${bytes(storage.quota)}`,
+      tone: "neutral",
+    },
+    {
+      label: "الجهاز",
+      value: state?.deviceCode ?? "غير مقترن",
+      tone: state?.deviceCode ? "neutral" : "warn",
+    },
+    {
+      label: "انتهاء صلاحية العمل دون اتصال",
+      value: session?.expiresAt
         ? new Date(session.expiresAt).toLocaleString("ar")
         : "غير متاح",
-    ],
-    [
-      "Service worker",
-      `${worker.version} — ${worker.controlled && worker.shellReady ? "جاهز دون اتصال" : "غير جاهز"}`,
-    ],
-    ["إصدار التطبيق", import.meta.env.VITE_APP_VERSION ?? "1.0.0"],
+      tone: capabilityExpired ? "danger" : "neutral",
+    },
+    {
+      label: "Service worker",
+      value: `${worker.version} — ${worker.controlled && worker.shellReady ? "جاهز دون اتصال" : "غير جاهز"}`,
+      tone: worker.controlled && worker.shellReady ? "good" : "warn",
+    },
+    {
+      label: "إصدار التطبيق",
+      value: import.meta.env.VITE_APP_VERSION ?? "1.0.0",
+      tone: "neutral",
+    },
   ];
   return (
     <section className="mx-auto max-w-3xl">
@@ -178,7 +227,7 @@ export default function DiagnosticsPage() {
       {storage.persistent === false && (
         <div
           role="alert"
-          className="mb-4 rounded-xl border border-amber-400 bg-amber-50 p-4 text-amber-950"
+          className="pos-warning-panel mb-4 rounded-xl border p-4"
         >
           <b>التخزين الدائم غير ممنوح.</b>
           <p>
@@ -195,10 +244,19 @@ export default function DiagnosticsPage() {
         </div>
       )}
       <dl className="divide-y rounded-2xl bg-white shadow-sm">
-        {rows.map(([label, value]) => (
-          <div key={label} className="grid gap-1 p-4 sm:grid-cols-2">
+        {rows.map(({ label, value, tone }) => (
+          <div
+            key={label}
+            className="pos-diagnostic-row grid gap-1 p-4 sm:grid-cols-2"
+          >
             <dt className="font-medium text-slate-600">{label}</dt>
-            <dd className="font-bold">{value}</dd>
+            <dd className="font-bold">
+              <span
+                aria-hidden="true"
+                className={`pos-indicator ${tone === "neutral" ? "" : `pos-indicator-${tone}`}`}
+              />
+              {value}
+            </dd>
           </div>
         ))}
       </dl>

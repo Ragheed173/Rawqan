@@ -167,14 +167,14 @@ export function PosLayout() {
     ["/pos/diagnostics", "التشخيص", Stethoscope],
   ] as const;
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-100 text-slate-950">
-      <header className="sticky top-0 z-40 flex min-h-16 flex-wrap items-center justify-between gap-2 bg-slate-950 px-4 py-2 text-white">
+    <div dir="rtl" className="pos-theme min-h-screen">
+      <header className="pos-header sticky top-0 z-40 flex min-h-16 flex-wrap items-center justify-between gap-3 px-4 py-2.5">
         <div className="text-xl font-bold">روقان POS</div>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span
             className={cn(
-              "flex items-center gap-1 rounded-full px-3 py-1",
-              online ? "bg-emerald-600" : "bg-amber-600",
+              "pos-status-badge",
+              online ? "pos-status-online" : "pos-status-offline",
             )}
           >
             {online ? (
@@ -187,7 +187,7 @@ export function PosLayout() {
           <button
             disabled={syncing}
             onClick={() => void synchronize()}
-            className="flex min-h-11 items-center gap-2 rounded-xl bg-white/10 px-3 disabled:opacity-50"
+            className="pos-status-badge pos-status-queue min-h-11 px-3 disabled:opacity-50"
           >
             <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
             {syncing
@@ -198,14 +198,14 @@ export function PosLayout() {
           </button>
           <span
             className={cn(
-              "rounded-full px-3 py-1",
-              pwaReady ? "bg-sky-700" : "bg-slate-700",
+              "pos-status-badge",
+              pwaReady ? "pos-status-ready" : "pos-status-preparing",
             )}
           >
             {pwaReady ? "العمل دون اتصال جاهز" : "تهيئة العمل دون اتصال"}
           </span>
           {conflicts > 0 && (
-            <span className="rounded-full bg-rose-700 px-3 py-1">
+            <span className="pos-status-badge pos-status-conflict">
               {conflicts} تعارض يحتاج تدخلاً
             </span>
           )}
@@ -213,7 +213,7 @@ export function PosLayout() {
       </header>
       {(diagnostic || updateRegistration) && (
         <div
-          className="border-b border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+          className="pos-warning-panel border-b px-4 py-3 text-sm"
           role="alert"
         >
           <div className="mx-auto flex max-w-7xl items-center gap-3">
@@ -244,7 +244,7 @@ export function PosLayout() {
         </div>
       )}
       <div className="flex">
-        <nav className="sticky top-16 hidden h-[calc(100vh-4rem)] w-52 shrink-0 flex-col gap-2 bg-white p-3 shadow-sm md:flex">
+        <nav className="pos-side-nav sticky top-16 hidden h-[calc(100vh-4rem)] w-52 shrink-0 flex-col gap-2 p-3 shadow-sm md:flex">
           {nav.map(([to, label, Icon]) => (
             <NavLink
               key={to}
@@ -252,10 +252,8 @@ export function PosLayout() {
               end={to === "/pos"}
               className={({ isActive }) =>
                 cn(
-                  "flex min-h-12 items-center gap-3 rounded-xl px-4 font-medium focus-visible:outline focus-visible:outline-4 focus-visible:outline-amber-300",
-                  isActive
-                    ? "bg-amber-500 text-slate-950"
-                    : "hover:bg-slate-100",
+                  "pos-nav-link flex min-h-12 items-center gap-3 rounded-xl px-4 font-medium",
+                  isActive && "pos-nav-active",
                 )
               }
             >

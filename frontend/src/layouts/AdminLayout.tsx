@@ -1,5 +1,11 @@
-import { useState } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useState } from "react";
+import {
+  Link,
+  NavLink,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import {
   LayoutDashboard,
   FolderTree,
@@ -15,13 +21,13 @@ import {
   ScrollText,
   Users,
   MonitorSmartphone,
-} from 'lucide-react';
-import { useAuthStore } from '@/store/auth';
-import { usePermissions } from '@/hooks/usePermissions';
-import { Logo } from '@/components/shared/Logo';
-import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
-import type { Permission } from '@/types';
+} from "lucide-react";
+import { useAuthStore } from "@/store/auth";
+import { usePermissions } from "@/hooks/usePermissions";
+import { Logo } from "@/components/shared/Logo";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import type { Permission } from "@/types";
 
 interface NavItem {
   to: string;
@@ -33,16 +39,41 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { to: '/admin', label: 'لوحة التحكم', icon: LayoutDashboard, end: true },
-  { to: '/admin/categories', label: 'الأقسام', icon: FolderTree },
-  { to: '/admin/meals', label: 'الوجبات', icon: UtensilsCrossed },
-  { to: '/admin/analytics', label: 'التحليلات', icon: BarChart3, perm: 'analytics:read' },
-  { to: '/admin/qr', label: 'رمز QR', icon: QrCode },
-  { to: '/admin/data', label: 'البيانات', icon: Database, permAny: ['import:manage', 'backup:manage'] },
-  { to: '/admin/logs', label: 'السجل', icon: ScrollText, perm: 'logs:read' },
-  { to: '/admin/admins', label: 'المستخدمون', icon: Users, perm: 'admin:manage' },
-  { to: '/admin/pos', label: 'نقاط البيع', icon: MonitorSmartphone, permAny: ['pos:table:configure', 'pos:reports:read', 'pos:device:manage'] },
-  { to: '/admin/settings', label: 'الإعدادات', icon: Settings, perm: 'settings:write' },
+  { to: "/admin", label: "لوحة التحكم", icon: LayoutDashboard, end: true },
+  { to: "/admin/categories", label: "الأقسام", icon: FolderTree },
+  { to: "/admin/meals", label: "الوجبات", icon: UtensilsCrossed },
+  {
+    to: "/admin/analytics",
+    label: "التحليلات",
+    icon: BarChart3,
+    perm: "analytics:read",
+  },
+  { to: "/admin/qr", label: "رمز QR", icon: QrCode },
+  {
+    to: "/admin/data",
+    label: "البيانات",
+    icon: Database,
+    permAny: ["import:manage", "backup:manage"],
+  },
+  { to: "/admin/logs", label: "السجل", icon: ScrollText, perm: "logs:read" },
+  {
+    to: "/admin/admins",
+    label: "المستخدمون",
+    icon: Users,
+    perm: "admin:manage",
+  },
+  {
+    to: "/admin/pos",
+    label: "نقاط البيع",
+    icon: MonitorSmartphone,
+    permAny: ["pos:table:configure", "pos:reports:read", "pos:device:manage"],
+  },
+  {
+    to: "/admin/settings",
+    label: "الإعدادات",
+    icon: Settings,
+    perm: "settings:write",
+  },
 ];
 
 /** Admin shell: dark sidebar (collapsible on mobile) + content area. */
@@ -50,16 +81,22 @@ export function AdminLayout() {
   const { admin, logout } = useAuthStore();
   const { can, canAny } = usePermissions();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isPosAdmin =
+    location.pathname === "/admin/pos" ||
+    location.pathname.startsWith("/admin/pos/");
   const [open, setOpen] = useState(false);
 
   const nav = NAV.filter(
-    (item) => (!item.perm || can(item.perm)) && (!item.permAny || canAny(...item.permAny)),
+    (item) =>
+      (!item.perm || can(item.perm)) &&
+      (!item.permAny || canAny(...item.permAny)),
   );
 
   const handleLogout = async () => {
     await logout();
-    toast.success('تم تسجيل الخروج');
-    navigate('/admin/login');
+    toast.success("تم تسجيل الخروج");
+    navigate("/admin/login");
   };
 
   const SidebarContent = () => (
@@ -77,8 +114,10 @@ export function AdminLayout() {
             onClick={() => setOpen(false)}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors',
-                isActive ? 'bg-accent text-accent-foreground' : 'text-white/70 hover:bg-white/10 hover:text-white',
+                "flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-accent text-accent-foreground"
+                  : "text-white/70 hover:bg-white/10 hover:text-white",
               )
             }
           >
@@ -107,7 +146,12 @@ export function AdminLayout() {
   );
 
   return (
-    <div className="min-h-screen bg-muted/40">
+    <div
+      className={cn(
+        "min-h-screen",
+        isPosAdmin ? "pos-theme pos-admin-shell" : "bg-muted/40",
+      )}
+    >
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 right-0 z-40 hidden w-64 flex-col bg-ink text-white lg:flex">
         <SidebarContent />
@@ -116,7 +160,10 @@ export function AdminLayout() {
       {/* Mobile sidebar */}
       {open && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setOpen(false)}
+          />
           <aside className="absolute inset-y-0 right-0 flex w-64 flex-col bg-ink text-white">
             <SidebarContent />
           </aside>
@@ -126,7 +173,11 @@ export function AdminLayout() {
       {/* Content */}
       <div className="lg:mr-64">
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur lg:hidden">
-          <button onClick={() => setOpen(true)} aria-label="فتح القائمة" className="grid h-10 w-10 place-items-center rounded-lg">
+          <button
+            onClick={() => setOpen(true)}
+            aria-label="فتح القائمة"
+            className="grid h-10 w-10 place-items-center rounded-lg"
+          >
             <Menu />
           </button>
           <Logo className="text-lg" />

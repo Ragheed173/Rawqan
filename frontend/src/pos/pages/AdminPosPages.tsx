@@ -4,6 +4,16 @@ import { api, unwrap } from "@/lib/apiClient";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuthStore } from "@/store/auth";
 import type { Permission } from "@/types";
+import {
+  CalendarDays,
+  ChartNoAxesCombined,
+  MonitorSmartphone,
+  ReceiptText,
+  ShieldCheck,
+  Stethoscope,
+  TableProperties,
+  type LucideIcon,
+} from "lucide-react";
 import { verifyAndStoreCapability } from "../auth/offline";
 import { formatMinor } from "../format";
 import { posErrorMessage } from "../errors";
@@ -58,36 +68,50 @@ function PageState({
 export const ADMIN_POS_SECTIONS: {
   to: string;
   label: string;
+  description: string;
+  icon: LucideIcon;
   permission: Permission;
 }[] = [
   {
     to: "/admin/pos/tables",
     label: "إعداد الطاولات",
+    description: "الأسماء والسعة والحالة والتفعيل",
+    icon: TableProperties,
     permission: "pos:table:configure",
   },
   {
     to: "/admin/pos/devices",
     label: "الأجهزة والإقران",
+    description: "أجهزة الكاشير وحالة الاتصال",
+    icon: MonitorSmartphone,
     permission: "pos:device:manage",
   },
   {
     to: "/admin/pos/reports",
     label: "تقارير المبيعات",
+    description: "المبيعات والدفعات والتصدير",
+    icon: ChartNoAxesCombined,
     permission: "pos:reports:read",
   },
   {
     to: "/admin/pos/invoices",
     label: "سجل الفواتير",
+    description: "البحث والتفاصيل والمرتجعات",
+    icon: ReceiptText,
     permission: "pos:reports:read",
   },
   {
     to: "/admin/pos/reservations",
     label: "الحجوزات",
+    description: "مواعيد اليوم والطاولات المعيّنة",
+    icon: CalendarDays,
     permission: "pos:reservation:manage",
   },
   {
     to: "/admin/pos/audit",
     label: "سجل تدقيق POS",
+    description: "الأحداث المالية والتشغيلية",
+    icon: ShieldCheck,
     permission: "pos:audit:read",
   },
 ];
@@ -107,20 +131,39 @@ export function AdminPosHome() {
         إدارة تشغيل المطعم دون الحاجة إلى أدوات قاعدة البيانات.
       </p>
       <div className="mt-6 grid gap-3 md:grid-cols-2">
-        {sections.map((section) => (
-          <Link
-            key={section.to}
-            to={section.to}
-            className="min-h-16 rounded-xl bg-white p-5 font-bold shadow-sm focus-visible:outline focus-visible:outline-4 focus-visible:outline-amber-300"
-          >
-            {section.label}
-          </Link>
-        ))}
+        {sections.map((section) => {
+          const Icon = section.icon;
+          return (
+            <Link
+              key={section.to}
+              to={section.to}
+              className="pos-admin-card group flex min-h-28 items-center gap-4 rounded-2xl p-5"
+            >
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-amber-500 text-slate-950">
+                <Icon className="h-6 w-6" />
+              </span>
+              <span>
+                <b className="block text-lg">{section.label}</b>
+                <small className="mt-1 block font-normal text-slate-600">
+                  {section.description}
+                </small>
+              </span>
+            </Link>
+          );
+        })}
         <Link
           to="/pos/diagnostics"
-          className="min-h-16 rounded-xl bg-slate-900 p-5 font-bold text-white"
+          className="pos-admin-card flex min-h-28 items-center gap-4 rounded-2xl p-5"
         >
-          تشخيص جهاز POS الحالي
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-slate-900 text-white">
+            <Stethoscope className="h-6 w-6" />
+          </span>
+          <span>
+            <b className="block text-lg">تشخيص جهاز POS الحالي</b>
+            <small className="mt-1 block font-normal text-slate-600">
+              التخزين والمزامنة والعمل دون اتصال
+            </small>
+          </span>
         </Link>
       </div>
     </div>

@@ -10,11 +10,11 @@ import { formatMinor } from "../format";
 import { posErrorMessage } from "../errors";
 
 const colors: Record<string, string> = {
-  AVAILABLE: "border-emerald-500 bg-emerald-50",
-  OCCUPIED: "border-rose-500 bg-rose-50",
-  RESERVED: "border-blue-500 bg-blue-50",
-  BILL_REQUESTED: "border-amber-500 bg-amber-50",
-  DISABLED: "border-slate-400 bg-slate-200 opacity-60",
+  AVAILABLE: "pos-table-available",
+  OCCUPIED: "pos-table-occupied",
+  RESERVED: "pos-table-reserved",
+  BILL_REQUESTED: "pos-table-bill",
+  DISABLED: "pos-table-disabled",
 };
 const labels: Record<string, string> = {
   AVAILABLE: "متاحة",
@@ -127,7 +127,7 @@ export default function PosDashboardPage() {
               }
               onClick={() => void open(table.id)}
               className={cn(
-                "min-h-44 rounded-2xl border-2 p-4 text-right shadow-sm transition hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-4 focus-visible:outline-amber-300",
+                "pos-table-card min-h-44 rounded-2xl p-4 text-right transition hover:-translate-y-0.5",
                 colors[table.status] ?? colors.AVAILABLE,
               )}
             >
@@ -135,7 +135,7 @@ export default function PosDashboardPage() {
                 <div className="text-xl font-bold">
                   {table.displayName ?? table.code}
                 </div>
-                <span className="text-sm font-bold">
+                <span className="pos-table-status text-sm font-bold">
                   {labels[table.status] ?? table.status}
                 </span>
               </div>

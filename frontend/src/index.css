@@ -78,13 +78,13 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-feature-settings: 'kern', 'liga';
+    font-feature-settings: "kern", "liga";
   }
 
   /* Latin text uses Poppins */
   :lang(en),
   .font-latin {
-    font-family: 'Poppins', system-ui, sans-serif;
+    font-family: "Poppins", system-ui, sans-serif;
   }
 
   ::selection {
@@ -105,12 +105,318 @@
 }
 
 @layer components {
+  /* ─── Rawaqan POS visual system ─────────────────────────────
+     Deliberately scoped: POS stays a single warm, high-contrast theme even if
+     the public/admin shell follows the system dark-mode preference. */
+  .pos-theme {
+    --pos-bg: 42 38% 96%;
+    --pos-surface: 42 35% 99%;
+    --pos-surface-muted: 40 24% 92%;
+    --pos-border: 38 19% 79%;
+    --pos-text: 216 31% 16%;
+    --pos-text-muted: 215 14% 39%;
+    --pos-primary: 43 68% 52%;
+    --pos-primary-hover: 41 66% 44%;
+    --pos-header: 216 32% 15%;
+    --pos-success: 154 55% 33%;
+    --pos-danger: 357 59% 45%;
+    --pos-warning: 35 80% 47%;
+    --pos-input-bg: 42 33% 98%;
+    --pos-input-border: 38 20% 72%;
+
+    /* Map the existing semantic Tailwind palette inside POS only. */
+    --background: var(--pos-bg);
+    --foreground: var(--pos-text);
+    --card: var(--pos-surface);
+    --card-foreground: var(--pos-text);
+    --popover: var(--pos-surface);
+    --popover-foreground: var(--pos-text);
+    --primary: var(--pos-header);
+    --primary-foreground: 42 35% 96%;
+    --secondary: var(--pos-surface-muted);
+    --secondary-foreground: var(--pos-text);
+    --muted: var(--pos-surface-muted);
+    --muted-foreground: var(--pos-text-muted);
+    --border: var(--pos-border);
+    --input: var(--pos-input-border);
+    --ring: var(--pos-primary);
+    --accent: var(--pos-primary);
+    --accent-foreground: var(--pos-text);
+    --destructive: var(--pos-danger);
+
+    color-scheme: light;
+    background: hsl(var(--pos-bg));
+    color: hsl(var(--pos-text));
+  }
+
+  .pos-theme :where(input, select, textarea) {
+    min-height: 2.875rem;
+    border: 1px solid hsl(var(--pos-input-border));
+    background-color: hsl(var(--pos-input-bg));
+    color: hsl(var(--pos-text));
+    caret-color: hsl(var(--pos-text));
+    text-align: right;
+    opacity: 1;
+    transition:
+      border-color 150ms ease,
+      box-shadow 150ms ease,
+      background-color 150ms ease;
+  }
+
+  .pos-theme textarea {
+    min-height: 5.5rem;
+    resize: vertical;
+  }
+
+  .pos-theme :where(input, textarea)::placeholder {
+    color: hsl(var(--pos-text-muted) / 0.82);
+    opacity: 1;
+  }
+
+  .pos-theme :where(input, select, textarea):focus,
+  .pos-theme :where(input, select, textarea):focus-visible {
+    border-color: hsl(var(--pos-primary-hover));
+    outline: none;
+    box-shadow: 0 0 0 3px hsl(var(--pos-primary) / 0.28);
+  }
+
+  .pos-theme :where(input, select, textarea):disabled {
+    border-color: hsl(var(--pos-border));
+    background: hsl(var(--pos-surface-muted));
+    color: hsl(var(--pos-text-muted));
+    cursor: not-allowed;
+    opacity: 0.72;
+  }
+
+  .pos-theme select option {
+    background: hsl(var(--pos-surface));
+    color: hsl(var(--pos-text));
+  }
+
+  .pos-theme button,
+  .pos-theme a {
+    transition:
+      color 150ms ease,
+      background-color 150ms ease,
+      border-color 150ms ease,
+      box-shadow 150ms ease,
+      transform 100ms ease;
+  }
+
+  .pos-theme :where(button, a):focus-visible {
+    outline: 3px solid hsl(var(--pos-primary) / 0.65);
+    outline-offset: 2px;
+  }
+
+  .pos-theme button:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  .pos-theme :where(button, input, select, textarea):disabled {
+    cursor: not-allowed;
+  }
+
+  .pos-theme button:disabled {
+    filter: saturate(0.35);
+    opacity: 0.56;
+    box-shadow: none;
+  }
+
+  /* Compatibility bridge for existing POS utilities while components move to
+     semantic classes. Specificity keeps OS/system dark mode from leaking in. */
+  .pos-theme .bg-white {
+    background-color: hsl(var(--pos-surface));
+  }
+  .pos-theme .bg-slate-50,
+  .pos-theme .bg-slate-100,
+  .pos-theme .bg-slate-200 {
+    background-color: hsl(var(--pos-surface-muted));
+  }
+  .pos-theme .text-slate-950,
+  .pos-theme .text-slate-900 {
+    color: hsl(var(--pos-text));
+  }
+  .pos-theme .text-slate-500,
+  .pos-theme .text-slate-600 {
+    color: hsl(var(--pos-text-muted));
+  }
+  .pos-theme .bg-slate-950,
+  .pos-theme .bg-slate-900 {
+    background-color: hsl(var(--pos-header));
+    color: hsl(42 35% 96%);
+  }
+  .pos-theme button:is(.bg-slate-950, .bg-slate-900):hover:not(:disabled) {
+    background-color: hsl(216 29% 22%);
+  }
+  .pos-theme .bg-amber-500 {
+    background-color: hsl(var(--pos-primary));
+    color: hsl(var(--pos-text));
+  }
+  .pos-theme button.bg-amber-500:hover:not(:disabled) {
+    background-color: hsl(var(--pos-primary-hover));
+    color: hsl(42 35% 98%);
+  }
+  .pos-theme .bg-emerald-600,
+  .pos-theme .bg-emerald-700 {
+    background-color: hsl(var(--pos-success));
+    color: hsl(42 35% 98%);
+  }
+  .pos-theme button:is(.bg-emerald-600, .bg-emerald-700):hover:not(:disabled) {
+    background-color: hsl(154 58% 27%);
+  }
+  .pos-theme .bg-rose-700 {
+    background-color: hsl(var(--pos-danger));
+    color: hsl(42 35% 98%);
+  }
+  .pos-theme button.bg-rose-700:hover:not(:disabled) {
+    background-color: hsl(357 63% 37%);
+  }
+  .pos-theme :where(.rounded-xl.bg-white, .rounded-2xl.bg-white) {
+    border: 1px solid hsl(var(--pos-border) / 0.72);
+    box-shadow: 0 5px 18px hsl(var(--pos-header) / 0.06);
+  }
+
+  .pos-header {
+    border-bottom: 1px solid hsl(var(--pos-primary) / 0.3);
+    background: hsl(var(--pos-header));
+    color: hsl(42 35% 96%);
+    box-shadow: 0 4px 16px hsl(var(--pos-header) / 0.18);
+  }
+
+  .pos-status-badge {
+    display: inline-flex;
+    min-height: 2rem;
+    align-items: center;
+    gap: 0.375rem;
+    border: 1px solid hsl(42 35% 96% / 0.18);
+    border-radius: 9999px;
+    padding: 0.3rem 0.7rem;
+    font-weight: 600;
+    line-height: 1.15;
+  }
+  .pos-status-online {
+    background: hsl(var(--pos-success));
+  }
+  .pos-status-offline {
+    background: hsl(var(--pos-warning));
+    color: hsl(var(--pos-text));
+  }
+  .pos-status-queue {
+    background: hsl(216 20% 24%);
+  }
+  .pos-status-ready {
+    background: hsl(208 45% 35%);
+  }
+  .pos-status-preparing {
+    background: hsl(215 15% 33%);
+  }
+  .pos-status-conflict {
+    background: hsl(var(--pos-danger));
+  }
+
+  .pos-side-nav {
+    border-inline-end: 1px solid hsl(var(--pos-border));
+    background: hsl(var(--pos-surface));
+  }
+  .pos-nav-link {
+    color: hsl(var(--pos-text-muted));
+  }
+  .pos-nav-link:hover {
+    background: hsl(var(--pos-surface-muted));
+    color: hsl(var(--pos-text));
+  }
+  .pos-nav-active {
+    background: hsl(var(--pos-primary));
+    color: hsl(var(--pos-text));
+    box-shadow: inset -4px 0 0 hsl(var(--pos-primary-hover));
+  }
+
+  .pos-table-card {
+    border: 1px solid hsl(var(--pos-border));
+    border-inline-start-width: 5px;
+    background: hsl(var(--pos-surface));
+    color: hsl(var(--pos-text));
+    box-shadow: 0 5px 18px hsl(var(--pos-header) / 0.07);
+  }
+  .pos-table-card:hover:not(:disabled) {
+    border-color: hsl(var(--pos-primary-hover) / 0.65);
+    box-shadow: 0 9px 24px hsl(var(--pos-header) / 0.11);
+  }
+  .pos-table-available {
+    border-inline-start-color: hsl(var(--pos-success));
+  }
+  .pos-table-occupied {
+    border-inline-start-color: hsl(var(--pos-danger));
+  }
+  .pos-table-reserved {
+    border-inline-start-color: hsl(208 55% 42%);
+  }
+  .pos-table-bill {
+    border-inline-start-color: hsl(var(--pos-warning));
+  }
+  .pos-table-disabled {
+    border-inline-start-color: hsl(var(--pos-text-muted));
+    background: hsl(var(--pos-surface-muted));
+  }
+  .pos-table-status {
+    border-radius: 9999px;
+    background: hsl(var(--pos-surface-muted));
+    padding: 0.25rem 0.6rem;
+    color: hsl(var(--pos-text));
+  }
+
+  .pos-admin-shell {
+    background: hsl(var(--pos-bg));
+    color: hsl(var(--pos-text));
+  }
+  .pos-admin-shell aside.bg-ink {
+    background: hsl(var(--pos-header));
+  }
+  .pos-admin-card {
+    border: 1px solid hsl(var(--pos-border));
+    background: hsl(var(--pos-surface));
+    color: hsl(var(--pos-text));
+    box-shadow: 0 7px 22px hsl(var(--pos-header) / 0.07);
+  }
+  .pos-admin-card:hover {
+    border-color: hsl(var(--pos-primary-hover) / 0.65);
+    box-shadow: 0 10px 28px hsl(var(--pos-header) / 0.12);
+    transform: translateY(-1px);
+  }
+
+  .pos-warning-panel {
+    border-color: hsl(var(--pos-warning) / 0.55);
+    background: hsl(42 75% 91%);
+    color: hsl(31 55% 22%);
+  }
+  .pos-diagnostic-row {
+    align-items: center;
+  }
+  .pos-indicator {
+    display: inline-block;
+    width: 0.55rem;
+    height: 0.55rem;
+    margin-inline-end: 0.55rem;
+    border-radius: 9999px;
+    background: hsl(var(--pos-text-muted));
+    vertical-align: middle;
+  }
+  .pos-indicator.pos-indicator-good {
+    background: hsl(var(--pos-success));
+  }
+  .pos-indicator.pos-indicator-warn {
+    background: hsl(var(--pos-warning));
+  }
+  .pos-indicator.pos-indicator-danger {
+    background: hsl(var(--pos-danger));
+  }
+
   /* Skeleton shimmer used by loading states (Task 12) */
   .skeleton {
     @apply relative overflow-hidden bg-muted/60 rounded-md;
   }
   .skeleton::after {
-    content: '';
+    content: "";
     @apply absolute inset-0 -translate-x-full;
     background: linear-gradient(
       90deg,
