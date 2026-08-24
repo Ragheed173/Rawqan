@@ -38,3 +38,7 @@ coverage/
 
 # Vite
 frontend/.vite/
+
+pos_offline_private.pem
+pos_offline_public.pem
+*.pem
