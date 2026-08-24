@@ -12,8 +12,8 @@ import { config } from "@/config/env";
 import { posErrorCode, posErrorMessage } from "../errors";
 
 let running: Promise<void> | null = null;
-export function syncNow() {
-  running ??= withCrossTabLock(runSync).finally(() => {
+export function syncNow(options: { retryFailed?: boolean } = {}) {
+  running ??= withCrossTabLock(() => runSync(options)).finally(() => {
     running = null;
   });
   return running;
@@ -29,12 +29,18 @@ async function withCrossTabLock(work: () => Promise<void>) {
   return work();
 }
 
-async function runSync() {
+async function runSync(options: { retryFailed?: boolean } = {}) {
   const state = await posDb.deviceState.get("primary");
   if (!state) return;
   // The exclusive browser lock means any rows left in SYNCING came from an
   // interrupted tab/process. Requeue them before selecting due work.
   await recoverInterruptedOperations();
+  if (options.retryFailed) {
+    await posDb.syncOperations
+      .where("status")
+      .equals("FAILED")
+      .modify({ nextAttemptAt: new Date().toISOString() });
+  }
   const due = await posDb.syncOperations
     .where("status")
     .anyOf("PENDING", "FAILED")
@@ -44,9 +50,7 @@ async function runSync() {
         operation.nextAttemptAt <= new Date().toISOString(),
     )
     .sortBy("createdAt");
-  for (const operation of due.sort((a, b) =>
-    BigInt(a.localSequence) < BigInt(b.localSequence) ? -1 : 1,
-  )) {
+  for (const operation of orderDueOperations(due)) {
     await posDb.syncOperations.update(operation.operationId, {
       status: "SYNCING",
       attempts: operation.attempts + 1,
@@ -95,6 +99,34 @@ async function runSync() {
     businessDayCutoff: pull.configuration.settings?.businessDayCutoff,
     restaurantName: pull.configuration.settings?.name,
   });
+}
+
+export function orderDueOperations(operations: SyncOperation[]) {
+  const ordered = [...operations].sort((a, b) =>
+    BigInt(a.localSequence) < BigInt(b.localSequence) ? -1 : 1,
+  );
+  const blockedPaymentIndex = ordered.findIndex(
+    (operation) => operation.errorCode === "SHIFT_REQUIRED",
+  );
+  const pendingOpenShiftIndex = ordered.findIndex(
+    (operation, index) =>
+      index > blockedPaymentIndex && operation.operationType === "OPEN_SHIFT",
+  );
+  const hasInterveningClose = ordered.some(
+    (operation, index) =>
+      index > blockedPaymentIndex &&
+      index < pendingOpenShiftIndex &&
+      operation.operationType === "CLOSE_SHIFT",
+  );
+  if (
+    blockedPaymentIndex >= 0 &&
+    pendingOpenShiftIndex > blockedPaymentIndex &&
+    !hasInterveningClose
+  ) {
+    const [openShift] = ordered.splice(pendingOpenShiftIndex, 1);
+    ordered.splice(blockedPaymentIndex, 0, openShift!);
+  }
+  return ordered;
 }
 
 export async function recoverInterruptedOperations() {
@@ -150,17 +182,19 @@ export async function checkBackendHealth() {
 }
 
 async function healthAndSync() {
+  const healthy = await checkBackendHealth();
+  window.dispatchEvent(
+    new CustomEvent("rawaqan-pos-connectivity", { detail: healthy }),
+  );
+  if (!healthy) return;
   try {
-    if (!(await checkBackendHealth())) throw new Error("BACKEND_UNAVAILABLE");
-    window.dispatchEvent(
-      new CustomEvent("rawaqan-pos-connectivity", { detail: true }),
-    );
     await syncNow();
   } catch {
+    const stillHealthy = await checkBackendHealth();
     window.dispatchEvent(
-      new CustomEvent("rawaqan-pos-connectivity", { detail: false }),
+      new CustomEvent("rawaqan-pos-connectivity", { detail: stillHealthy }),
     );
-    /* Offline is expected; the outbox remains durable. */
+    /* A rejected operation stays in the durable outbox for diagnostics. */
   }
 }
 
@@ -269,7 +303,12 @@ async function applyPulledOperations(
 ) {
   await posDb.transaction(
     "rw",
-    [posDb.restaurantTables, posDb.reservations, posDb.shifts],
+    [
+      posDb.restaurantTables,
+      posDb.reservations,
+      posDb.shifts,
+      posDb.syncOperations,
+    ],
     async () => {
       if (configuration.tables) {
         await posDb.restaurantTables.clear();
@@ -289,10 +328,48 @@ async function applyPulledOperations(
           })),
         );
       }
-      if (configuration.currentShift)
-        await posDb.shifts.put(configuration.currentShift);
+      await reconcileCurrentShift(configuration.currentShift);
     },
   );
+}
+
+export async function reconcileCurrentShift(
+  currentShift: ({ id: string } & Record<string, unknown>) | null | undefined,
+) {
+  const openShifts = await posDb.shifts
+    .where("status")
+    .equals("OPEN")
+    .toArray();
+  if (currentShift) {
+    const staleIds = openShifts
+      .filter((shift) => shift.id !== currentShift.id)
+      .map((shift) => shift.id);
+    if (staleIds.length) await posDb.shifts.bulkDelete(staleIds);
+    await posDb.shifts.put(currentShift);
+    return;
+  }
+
+  const unsyncedOpenShiftIds = new Set(
+    (
+      await posDb.syncOperations
+        .where("status")
+        .anyOf("PENDING", "SYNCING", "FAILED")
+        .filter(
+          (operation) =>
+            operation.operationType === "OPEN_SHIFT" &&
+            operation.errorCode !== "SHIFT_ALREADY_OPEN" &&
+            operation.errorCode !== "PERMISSION_DENIED" &&
+            operation.errorCode !== "DEVICE_NOT_AUTHORIZED",
+        )
+        .toArray()
+    )
+      .map((operation) => operation.payload.id)
+      .filter((id): id is string => typeof id === "string"),
+  );
+  const staleIds = openShifts
+    .filter((shift) => !unsyncedOpenShiftIds.has(shift.id))
+    .map((shift) => shift.id);
+  if (staleIds.length) await posDb.shifts.bulkDelete(staleIds);
 }
 
 export async function applyBootstrap(data: {
@@ -348,6 +425,7 @@ export async function applyBootstrap(data: {
       posDb.restaurantTables,
       posDb.reservations,
       posDb.shifts,
+      posDb.syncOperations,
       posDb.deviceState,
     ],
     async () => {
@@ -412,7 +490,7 @@ export async function applyBootstrap(data: {
               [],
           })),
         );
-      if (data.currentShift) await posDb.shifts.put(data.currentShift);
+      await reconcileCurrentShift(data.currentShift);
       const current = await posDb.deviceState.get("primary");
       await posDb.deviceState.put({
         key: "primary",

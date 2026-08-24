@@ -12,7 +12,12 @@ import {
   Stethoscope,
 } from "lucide-react";
 import { posDb } from "../db/schema";
-import { startSyncTriggers, syncNow, applyBootstrap } from "../sync/engine";
+import {
+  startSyncTriggers,
+  syncNow,
+  applyBootstrap,
+  checkBackendHealth,
+} from "../sync/engine";
 import { usePosLive } from "../hooks/usePosLive";
 import { cn } from "@/lib/utils";
 import { api, unwrap } from "@/lib/apiClient";
@@ -46,11 +51,12 @@ export function PosLayout() {
     setSyncing(true);
     setDiagnostic("");
     try {
-      await syncNow();
+      await syncNow({ retryFailed: true });
+      setOnline(true);
     } catch (error) {
-      setOnline(false);
+      setOnline(await checkBackendHealth());
       setDiagnostic(
-        `${posErrorMessage(error, "فشلت المزامنة. تحقق من الاتصال وحاول مجدداً.")} لا تمسح بيانات الموقع.`,
+        `${posErrorMessage(error, "فشلت المزامنة. راجع تفاصيل العملية وحاول مجدداً.")} لا تمسح بيانات الموقع.`,
       );
     } finally {
       setSyncing(false);
