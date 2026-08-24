@@ -64,19 +64,12 @@ export const discountBody = z.discriminatedUnion("type", [
     reason: z.string().trim().min(1).max(500),
   }),
 ]);
-const payment = z.discriminatedUnion("method", [
-  z.object({
-    id: uuid.optional(),
-    method: z.literal("CASH"),
-    amountMinor: minorUnits,
-    tenderedMinor: minorUnits,
-  }),
-  z.object({
-    id: uuid.optional(),
-    method: z.literal("VISA"),
-    amountMinor: minorUnits,
-  }),
-]);
+const payment = z.object({
+  id: uuid.optional(),
+  method: z.literal("CASH"),
+  amountMinor: minorUnits,
+  tenderedMinor: minorUnits,
+});
 export const finalizeBody = z.object({
   id: uuid.optional(),
   orderId: uuid,

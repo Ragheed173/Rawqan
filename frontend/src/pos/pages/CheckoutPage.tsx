@@ -9,8 +9,6 @@ import { currentBusinessDate } from "../domain/businessDate";
 import { formatMinor } from "../format";
 import { posErrorMessage } from "../errors";
 
-type PaymentMode = "CASH" | "VISA" | "SPLIT";
-
 export default function CheckoutPage() {
   const { orderId } = useParams();
   const nav = useNavigate();
@@ -31,53 +29,30 @@ export default function CheckoutPage() {
     [orderId],
   );
   const total = addMinor(...items.map((item) => item.lineTotalMinor));
-  const [mode, setMode] = useState<PaymentMode>("CASH");
-  const [cashAmount, setCashAmount] = useState(total);
   const [tendered, setTendered] = useState(total);
   const [busy, setBusy] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [error, setError] = useState("");
-  const normalizedCash =
-    mode === "SPLIT"
-      ? BigInt(cashAmount || "0")
-      : mode === "CASH"
-        ? BigInt(total)
-        : 0n;
-  const visaAmount = BigInt(total) - normalizedCash;
-  const change =
-    normalizedCash > 0n ? BigInt(tendered || "0") - normalizedCash : 0n;
+  const cashAmount = BigInt(total);
+  const change = BigInt(tendered || "0") - cashAmount;
 
   const submit = async () => {
     const userId = admin?.id ?? offline?.userId;
     if (!userId || !orderId || busy || completed) return;
-    if (
-      normalizedCash < 0n ||
-      visaAmount < 0n ||
-      (mode === "SPLIT" && (normalizedCash === 0n || visaAmount === 0n))
-    ) {
-      setError("أدخل جزأين موجبين يساويان الإجمالي.");
-      return;
-    }
     setBusy(true);
     setError("");
     try {
-      const payments = [];
-      if (normalizedCash > 0n)
-        payments.push({
-          method: "CASH" as const,
-          amountMinor: normalizedCash.toString(),
-          tenderedMinor: tendered || normalizedCash.toString(),
-        });
-      if (visaAmount > 0n)
-        payments.push({
-          method: "VISA" as const,
-          amountMinor: visaAmount.toString(),
-        });
       await checkoutLocal({
         orderId,
         userId,
         businessDate: currentBusinessDate(device),
-        payments,
+        payments: [
+          {
+            method: "CASH",
+            amountMinor: cashAmount.toString(),
+            tenderedMinor: tendered || cashAmount.toString(),
+          },
+        ],
       });
       setCompleted(true);
       nav("/pos/invoices");
@@ -90,19 +65,6 @@ export default function CheckoutPage() {
     }
   };
 
-  const choose = (next: PaymentMode) => {
-    setMode(next);
-    setError("");
-    if (next === "CASH") {
-      setCashAmount(total);
-      setTendered(total);
-    } else if (next === "VISA") setCashAmount("0");
-    else {
-      const half = (BigInt(total) / 2n).toString();
-      setCashAmount(half);
-      setTendered(half);
-    }
-  };
   return (
     <div className="mx-auto max-w-2xl rounded-2xl bg-white p-6 shadow">
       <h1 className="text-3xl font-bold">الدفع</h1>
@@ -120,62 +82,25 @@ export default function CheckoutPage() {
           <dd className="text-xl font-bold">{formatMinor(total)}</dd>
         </div>
       </dl>
-      <div
-        className="grid grid-cols-3 gap-3"
-        role="group"
-        aria-label="طريقة الدفع"
-      >
-        {(["CASH", "VISA", "SPLIT"] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => choose(value)}
-            className={`min-h-16 rounded-xl focus-visible:outline focus-visible:outline-4 focus-visible:outline-amber-300 ${mode === value ? "bg-amber-500" : "bg-slate-100"}`}
-          >
-            {value === "CASH"
-              ? "نقدي"
-              : value === "VISA"
-                ? "Visa"
-                : "نقدي + Visa"}
-          </button>
-        ))}
+      <div className="rounded-xl bg-amber-500 p-4 text-center font-bold">
+        طريقة الدفع: نقدي
       </div>
-      {mode === "SPLIT" && (
-        <label className="mt-5 block">
-          الجزء النقدي (بالأغورة)
-          <input
-            aria-label="الجزء النقدي"
-            value={cashAmount}
-            onChange={(event) => {
-              const value = event.target.value.replace(/\D/g, "");
-              setCashAmount(value);
-              setTendered(value);
-            }}
-            className="mt-2 min-h-14 w-full rounded-xl border px-4 text-2xl"
-          />
-          <span className="mt-2 block font-bold">
-            جزء Visa: {visaAmount >= 0n ? formatMinor(visaAmount) : "غير صالح"}
-          </span>
-        </label>
-      )}
-      {mode !== "VISA" && (
-        <label className="mt-5 block">
-          المبلغ النقدي المستلم (بالأغورة)
-          <input
-            aria-label="المبلغ النقدي المستلم"
-            value={tendered}
-            onChange={(event) =>
-              setTendered(event.target.value.replace(/\D/g, ""))
-            }
-            className="mt-2 min-h-14 w-full rounded-xl border px-4 text-2xl"
-          />
-          <span
-            className={`mt-2 block text-xl font-bold ${change < 0n ? "text-rose-700" : "text-emerald-700"}`}
-          >
-            الباقي: {formatMinor(change)}
-          </span>
-        </label>
-      )}
+      <label className="mt-5 block">
+        المبلغ النقدي المستلم (بالأغورة)
+        <input
+          aria-label="المبلغ النقدي المستلم"
+          value={tendered}
+          onChange={(event) =>
+            setTendered(event.target.value.replace(/\D/g, ""))
+          }
+          className="mt-2 min-h-14 w-full rounded-xl border px-4 text-2xl"
+        />
+        <span
+          className={`mt-2 block text-xl font-bold ${change < 0n ? "text-rose-700" : "text-emerald-700"}`}
+        >
+          الباقي: {formatMinor(change)}
+        </span>
+      </label>
       {error && (
         <p
           role="alert"

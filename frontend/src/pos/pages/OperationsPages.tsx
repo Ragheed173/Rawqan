@@ -832,7 +832,6 @@ export function InvoiceDetailPage() {
     undefined,
     [],
   );
-  const [method, setMethod] = useState<"CASH" | "VISA">("CASH");
   const [tendered, setTendered] = useState("");
   const [busy, setBusy] = useState(false);
   const [printBusy, setPrintBusy] = useState(false);
@@ -894,9 +893,9 @@ export function InvoiceDetailPage() {
       await payLocalInvoice({
         invoiceId: invoice.id,
         userId,
-        method,
+        method: "CASH",
         amountMinor: due,
-        ...(method === "CASH" ? { tenderedMinor: tendered || due } : {}),
+        tenderedMinor: tendered || due,
       });
     } catch (cause) {
       setError(
@@ -991,30 +990,17 @@ export function InvoiceDetailPage() {
       )}
       {invoice.status === "OPEN" && (
         <div className="mt-5 rounded-xl bg-slate-100 p-4">
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => setMethod("CASH")}
-              className={`min-h-12 rounded-xl ${method === "CASH" ? "bg-amber-500" : "bg-white"}`}
-            >
-              نقدي
-            </button>
-            <button
-              onClick={() => setMethod("VISA")}
-              className={`min-h-12 rounded-xl ${method === "VISA" ? "bg-amber-500" : "bg-white"}`}
-            >
-              Visa
-            </button>
+          <div className="rounded-xl bg-amber-500 p-3 text-center font-bold">
+            طريقة الدفع: نقدي
           </div>
-          {method === "CASH" && (
-            <input
-              value={tendered}
-              onChange={(event) =>
-                setTendered(event.target.value.replace(/\D/g, ""))
-              }
-              placeholder={`المستلم بالأغورة (المطلوب ${due})`}
-              className="mt-3 min-h-12 w-full rounded-xl border px-3"
-            />
-          )}
+          <input
+            value={tendered}
+            onChange={(event) =>
+              setTendered(event.target.value.replace(/\D/g, ""))
+            }
+            placeholder={`المستلم بالأغورة (المطلوب ${due})`}
+            className="mt-3 min-h-12 w-full rounded-xl border px-3"
+          />
           <button
             disabled={busy}
             onClick={() => void pay()}

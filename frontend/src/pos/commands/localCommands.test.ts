@@ -213,8 +213,9 @@ describe("local-first POS commands", () => {
     await payLocalInvoice({
       invoiceId: result.invoices[0]!.id,
       userId: "admin",
-      method: "VISA",
+      method: "CASH",
       amountMinor: "1500",
+      tenderedMinor: "1500",
     });
     expect((await posDb.orders.get(orderId))?.status).toBe("PARTIALLY_BILLED");
     await payLocalInvoice({
@@ -233,12 +234,12 @@ describe("local-first POS commands", () => {
       .filter(
         (row) =>
           row.operationType === "CREATE_PAYMENT" &&
-          row.payload.method === "VISA",
+          row.payload.method === "CASH",
       )
       .first();
     expect(operation?.payload).toMatchObject({
       invoiceId: result.invoices[0]!.id,
-      method: "VISA",
+      method: "CASH",
       amountMinor: "1500",
     });
   });

@@ -1,6 +1,26 @@
 import { describe, it, expect } from "vitest";
 import { listItemsQuerySchema } from "../src/modules/menu/item.schemas.js";
 import { updateSettingsSchema } from "../src/modules/settings/settings.schemas.js";
+import { finalizeBody, paymentBody } from "../src/modules/pos/pos.schemas.js";
+
+describe("POS payment schemas — cash-only policy", () => {
+  it("accepts cash and rejects new Visa payments", () => {
+    expect(paymentBody.parse({
+      method: "CASH",
+      amountMinor: "1497",
+      tenderedMinor: "1500",
+    })).toMatchObject({ method: "CASH", amountMinor: 1497n });
+    expect(() => paymentBody.parse({
+      method: "VISA",
+      amountMinor: "1497",
+    })).toThrow();
+    expect(() => finalizeBody.parse({
+      orderId: "429fab37-0d0c-4d7f-b4c1-3d69b167fc5d",
+      expectedVersion: 1,
+      payments: [{ method: "VISA", amountMinor: "1497" }],
+    })).toThrow();
+  });
+});
 
 describe("listItemsQuerySchema — query boolean coercion (regression: archived=false)", () => {
   it('parses "false" as false (NOT true)', () => {

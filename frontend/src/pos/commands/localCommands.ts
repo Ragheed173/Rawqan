@@ -107,7 +107,7 @@ export async function updateLocalReservation(id: string, patch: Partial<Omit<Loc
   });
 }
 
-export async function checkoutLocal(input: { orderId: string; userId: string; businessDate: string; payments: ({ method: "CASH"; amountMinor: string; tenderedMinor: string } | { method: "VISA"; amountMinor: string })[] }) {
+export async function checkoutLocal(input: { orderId: string; userId: string; businessDate: string; payments: { method: "CASH"; amountMinor: string; tenderedMinor: string }[] }) {
   const order = await posDb.orders.get(input.orderId); if (!order) throw new Error("ORDER_NOT_FOUND");
   const items = await posDb.orderItems.where("orderId").equals(input.orderId).toArray(); if (!items.length) throw new Error("EMPTY_ORDER");
   const subtotalMinor = addMinor(...items.map((item) => item.lineTotalMinor)); const allocated = addMinor(...input.payments.map((payment) => payment.amountMinor)); if (allocated !== subtotalMinor) throw new Error("INVALID_PAYMENT_TOTAL");
@@ -149,7 +149,7 @@ export async function finalizeLocalItemSplit(input: { orderId: string; userId: s
   }, input.dependencies ?? []);
 }
 
-export async function finalizeLocalEqualSplit(input: { orderId: string; userId: string; businessDate: string; splitCount: number; payments?: (({ method: "CASH"; amountMinor: string; tenderedMinor: string } | { method: "VISA"; amountMinor: string })[])[] }) {
+export async function finalizeLocalEqualSplit(input: { orderId: string; userId: string; businessDate: string; splitCount: number; payments?: { method: "CASH"; amountMinor: string; tenderedMinor: string }[][] }) {
   if (!Number.isInteger(input.splitCount) || input.splitCount < 2 || input.splitCount > 50) throw new Error("INVALID_SPLIT_COUNT");
   if (input.payments && input.payments.length !== input.splitCount) throw new Error("INVALID_SPLIT_COUNT");
   const order = await posDb.orders.get(input.orderId); if (!order || !["OPEN", "BILL_REQUESTED"].includes(order.status)) throw new Error("INVALID_ORDER_STATE");
@@ -180,7 +180,7 @@ export async function finalizeLocalEqualSplit(input: { orderId: string; userId: 
   });
 }
 
-export async function payLocalInvoice(input: { invoiceId: string; userId: string; method: "CASH" | "VISA"; amountMinor: string; tenderedMinor?: string }) {
+export async function payLocalInvoice(input: { invoiceId: string; userId: string; method: "CASH"; amountMinor: string; tenderedMinor?: string }) {
   const invoice = await posDb.invoices.get(input.invoiceId); if (!invoice) throw new Error("INVOICE_NOT_FOUND"); if (invoice.status !== "OPEN") throw new Error("INVOICE_ALREADY_PAID");
   const existing = await posDb.payments.where("invoiceId").equals(invoice.id).toArray(); const alreadyPaid = existing.reduce((sum, payment) => sum + BigInt(payment.amountMinor), 0n); const due = BigInt(invoice.totalMinor) - alreadyPaid; const amount = BigInt(input.amountMinor);
   if (amount <= 0n || amount > due) throw new Error("INVALID_PAYMENT_TOTAL"); const tendered = input.method === "CASH" ? BigInt(input.tenderedMinor ?? "0") : null; if (tendered !== null && tendered < amount) throw new Error("INVALID_CASH_TENDER");
