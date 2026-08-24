@@ -1,18 +1,57 @@
 /* Rawaqan service worker (Task 22): offline support, image caching, offline menu.
    Hand-written (no build-time precache) so it survives Vite's hashed asset names. */
 
-const VERSION = 'v1';
+const VERSION = 'pos-v5';
 const SHELL_CACHE = `rawaqan-shell-${VERSION}`;
 const ASSET_CACHE = `rawaqan-assets-${VERSION}`;
 const IMAGE_CACHE = `rawaqan-images-${VERSION}`;
 const API_CACHE = `rawaqan-api-${VERSION}`;
+const POS_READY_KEY = '/__rawaqan_pos_ready__';
 
-const OFFLINE_URLS = ['/', '/menu'];
+const OFFLINE_URLS = ['/', '/menu', '/pos'];
+const CACHEABLE_PUBLIC_API_PATHS = new Set(['/api/categories', '/api/items', '/api/tags', '/api/settings']);
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(SHELL_CACHE).then((c) => c.addAll(OFFLINE_URLS)).catch(() => {}));
-  self.skipWaiting();
+  // A worker is installable only after the complete POS shell is durable.
+  // Serving cached HTML without its hashed modules produces a blank cold start.
+  event.waitUntil(precachePosAssets());
 });
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+  if (event.data?.type === 'PRECACHE_POS') event.waitUntil(precachePosAssets());
+  if (event.data?.type === 'GET_STATUS') {
+    event.waitUntil(caches.match(POS_READY_KEY).then((ready) => event.ports[0]?.postMessage({ version: VERSION, shellReady: Boolean(ready) })));
+  }
+});
+
+async function precachePosAssets() {
+  const shellCache = await caches.open(SHELL_CACHE);
+  await shellCache.addAll(OFFLINE_URLS);
+  const response = await fetch('/manifest.json', { cache: 'no-store' });
+  if (!response.ok) throw new Error('POS manifest unavailable');
+  const manifest = await response.json();
+  const selected = new Set(['index.html', ...Object.keys(manifest).filter((key) => key.includes('src/pos/'))]);
+  const visited = new Set();
+  const visit = (key) => {
+    if (!key || visited.has(key)) return;
+    visited.add(key);
+    selected.add(key);
+    const entry = manifest[key];
+    if (!entry) return;
+    // POS dynamic entries are already selected above. Only their static graph
+    // is required; downloading every public/admin route would waste storage.
+    for (const dependency of entry.imports || []) visit(dependency);
+  };
+  [...selected].forEach(visit);
+  const urls = [...selected].flatMap((key) => {
+    const entry = manifest[key];
+    return entry ? [entry.file, ...(entry.css || []), ...(entry.assets || [])].map((file) => `/${file}`) : [];
+  });
+  const cache = await caches.open(ASSET_CACHE);
+  await Promise.all([...new Set(urls)].map((url) => cache.add(url)));
+  await shellCache.put(POS_READY_KEY, new Response(VERSION, { headers: { 'content-type': 'text/plain' } }));
+}
 
 self.addEventListener('activate', (event) => {
   const keep = new Set([SHELL_CACHE, ASSET_CACHE, IMAGE_CACHE, API_CACHE]);
@@ -31,7 +70,7 @@ async function cacheFirst(req, cacheName) {
   if (cached) return cached;
   try {
     const res = await fetch(req);
-    if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone());
+    if (res && (res.ok || res.type === 'opaque')) await cache.put(req, res.clone());
     return res;
   } catch {
     return cached || Response.error();
@@ -40,10 +79,13 @@ async function cacheFirst(req, cacheName) {
 
 async function staleWhileRevalidate(req, cacheName) {
   const cache = await caches.open(cacheName);
-  const cached = await cache.match(req);
+  // Static servers commonly emit `Vary: Origin`. The install-time precache and
+  // a later module request can carry different Origin headers even though the
+  // immutable hashed URL is identical, so header-sensitive matching can miss.
+  const cached = await cache.match(req, { ignoreVary: true });
   const network = fetch(req)
-    .then((res) => {
-      if (res && res.ok) cache.put(req, res.clone());
+    .then(async (res) => {
+      if (res && res.ok) await cache.put(req, res.clone());
       return res;
     })
     .catch(() => cached);
@@ -69,19 +111,18 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // SPA navigations → network-first, fall back to cached shell (offline menu).
+  // SPA navigations → network-first, fall back to the correct cached shell.
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => caches.match(request).then((r) => r || caches.match('/'))),
+      fetch(request).catch(() => caches.match(request).then((r) => r || caches.match(url.pathname.startsWith('/pos') ? '/pos' : '/'))),
     );
     return;
   }
 
-  // Public API GETs → network-first with cache fallback (offline menu data).
-  if (url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/admin')) {
-    event.respondWith(networkFirst(request, API_CACHE).catch(() => new Response('[]', {
-      headers: { 'Content-Type': 'application/json' },
-    })));
+  // Only anonymous menu endpoints may enter Cache Storage. Auth, POS, admin,
+  // financial, sync and health responses must never be cached by the SW.
+  if (url.origin === self.location.origin && CACHEABLE_PUBLIC_API_PATHS.has(url.pathname)) {
+    event.respondWith(networkFirst(request, API_CACHE));
     return;
   }
 

@@ -8,7 +8,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   // Runtime queries use the (pooled) URL; migrations/introspection use the
   // direct URL. On Neon set DATABASE_URL=pooled (?pgbouncer=true) and
   // DIRECT_URL=direct. Locally/Docker both point at the same Postgres.
@@ -22,6 +22,7 @@ enum AdminRole {
   SUPER_ADMIN
   MANAGER
   STAFF
+  CASHIER
 }
 
 enum SpiceLevel {
@@ -37,6 +38,117 @@ enum ActivityAction {
   DELETE
   LOGIN
   LOGOUT
+  ORDER_CREATED
+  ORDER_UPDATED
+  ORDER_CANCELLED
+  TABLE_TRANSFERRED
+  TABLES_MERGED
+  DISCOUNT_APPLIED
+  INVOICE_CREATED
+  PAYMENT_CREATED
+  INVOICE_VOIDED
+  REFUND_CREATED
+  SHIFT_OPENED
+  SHIFT_CLOSED
+  INVOICE_PRINTED
+  INVOICE_REPRINTED
+  POS_SYNC_APPLIED
+  DEVICE_PAIRED
+  DEVICE_UPDATED
+  RESERVATION_CREATED
+  RESERVATION_UPDATED
+  RESERVATION_CANCELLED
+}
+
+enum CatalogChangeAction {
+  CREATED
+  UPDATED
+  DEACTIVATED
+  RESTORED
+  DELETED
+}
+
+enum DiningTableStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  BILL_REQUESTED
+  DISABLED
+}
+
+enum OrderStatus {
+  OPEN
+  BILL_REQUESTED
+  PARTIALLY_BILLED
+  CLOSED
+  CANCELLED
+  MERGED
+}
+
+enum ModifierGroupType {
+  VARIANT
+  ADD_ON
+}
+
+enum ModifierPriceType {
+  DELTA
+  REPLACEMENT
+}
+
+enum InvoiceStatus {
+  OPEN
+  PAID
+  VOIDED
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum InvoiceSplitMode {
+  ITEM
+  EQUAL
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum PaymentMethod {
+  CASH
+  VISA
+}
+
+enum PaymentStatus {
+  COMPLETED
+  VOIDED
+  REFUNDED
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  SEATED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum CashierShiftStatus {
+  OPEN
+  CLOSED
+}
+
+enum ReceiptPrintType {
+  INITIAL
+  REPRINT
+}
+
+enum SyncOperationStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CONFLICT
 }
 
 enum Weekday {
@@ -59,34 +171,48 @@ enum AnalyticsEventType {
 // ─── Auth / Admins ───────────────────────────────────────────
 
 model Admin {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  name         String
-  role         AdminRole @default(STAFF)
-  isActive     Boolean  @default(true) @map("is_active")
-  lastLoginAt  DateTime? @map("last_login_at")
-  failedLoginAttempts Int @default(0) @map("failed_login_attempts")
-  lockedUntil  DateTime? @map("locked_until")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  passwordHash        String    @map("password_hash")
+  name                String
+  role                AdminRole @default(STAFF)
+  isActive            Boolean   @default(true) @map("is_active")
+  lastLoginAt         DateTime? @map("last_login_at")
+  failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime? @map("locked_until")
+  posPinHash          String?   @map("pos_pin_hash")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
   activityLogs  ActivityLog[]
+
+  openedOrders          Order[]                @relation("OrderOpenedBy")
+  tableAssignments      OrderTableAssignment[] @relation("TableAssignedBy")
+  tableReleases         OrderTableAssignment[] @relation("TableReleasedBy")
+  orderDiscounts        OrderDiscount[]        @relation("OrderDiscountActor")
+  cashierInvoices       Invoice[]              @relation("InvoiceCashier")
+  invoiceDiscounts      InvoiceDiscount[]      @relation("InvoiceDiscountActor")
+  recordedPayments      Payment[]              @relation("PaymentActor")
+  invoiceVoids          InvoiceVoid[]          @relation("InvoiceVoidActor")
+  refunds               Refund[]               @relation("RefundActor")
+  createdReservations   Reservation[]          @relation("ReservationCreator")
+  cashierShifts         CashierShift[]         @relation("CashierShiftUser")
+  recordedReceiptPrints ReceiptPrintEvent[]    @relation("ReceiptPrintActor")
 
   @@index([isActive])
   @@map("admins")
 }
 
 model RefreshToken {
-  id        String   @id @default(cuid())
-  adminId   String   @map("admin_id")
-  tokenHash String   @unique @map("token_hash")
-  expiresAt DateTime @map("expires_at")
+  id        String    @id @default(cuid())
+  adminId   String    @map("admin_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
   revokedAt DateTime? @map("revoked_at")
-  userAgent String?  @map("user_agent")
+  userAgent String?   @map("user_agent")
   ip        String?
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime  @default(now()) @map("created_at")
 
   admin Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
 
@@ -98,38 +224,41 @@ model RefreshToken {
 // ─── Restaurant settings (singleton row) ─────────────────────
 
 model RestaurantSettings {
-  id             String   @id @default(cuid())
-  name           String   @default("روقان")
-  nameEn         String?  @map("name_en")
-  tagline        String?
-  taglineEn      String?  @map("tagline_en")
-  description    String?
-  logoUrl        String?  @map("logo_url")
-  logoPublicId   String?  @map("logo_public_id")
-  coverUrl       String?  @map("cover_url")
-  coverPublicId  String?  @map("cover_public_id")
-  phone          String?
-  whatsapp       String?
-  facebook       String?
-  instagram      String?
-  tiktok         String?
-  googleMapsUrl  String?  @map("google_maps_url")
-  addressLine    String?  @map("address_line")
-  latitude       Float?
-  longitude      Float?
-  currency       String   @default("EGP")
-  footerText     String?  @map("footer_text")
+  id                 String   @id @default(cuid())
+  name               String   @default("روقان")
+  nameEn             String?  @map("name_en")
+  tagline            String?
+  taglineEn          String?  @map("tagline_en")
+  description        String?
+  logoUrl            String?  @map("logo_url")
+  logoPublicId       String?  @map("logo_public_id")
+  coverUrl           String?  @map("cover_url")
+  coverPublicId      String?  @map("cover_public_id")
+  phone              String?
+  whatsapp           String?
+  facebook           String?
+  instagram          String?
+  tiktok             String?
+  googleMapsUrl      String?  @map("google_maps_url")
+  addressLine        String?  @map("address_line")
+  latitude           Float?
+  longitude          Float?
+  currency           String   @default("ILS")
+  posCurrency        String   @default("ILS") @map("pos_currency")
+  timezone           String   @default("Asia/Hebron")
+  businessDayCutoff  String   @default("04:00") @map("business_day_cutoff")
+  footerText         String?  @map("footer_text")
   // Theme color overrides (fall back to design tokens when null)
-  colorPrimary   String?  @map("color_primary")
-  colorAccent    String?  @map("color_accent")
-  colorBackground String? @map("color_background")
-  isOpenOverride Boolean? @map("is_open_override")
+  colorPrimary       String?  @map("color_primary")
+  colorAccent        String?  @map("color_accent")
+  colorBackground    String?  @map("color_background")
+  isOpenOverride     Boolean? @map("is_open_override")
   // Site modes (Task 22)
-  maintenanceMode    Boolean @default(false) @map("maintenance_mode")
-  maintenanceMessage String? @map("maintenance_message")
-  comingSoonMode     Boolean @default(false) @map("coming_soon_mode")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  maintenanceMode    Boolean  @default(false) @map("maintenance_mode")
+  maintenanceMessage String?  @map("maintenance_message")
+  comingSoonMode     Boolean  @default(false) @map("coming_soon_mode")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   openingHours OpeningHour[]
 
@@ -137,12 +266,12 @@ model RestaurantSettings {
 }
 
 model OpeningHour {
-  id         String   @id @default(cuid())
-  settingsId String   @map("settings_id")
+  id         String  @id @default(cuid())
+  settingsId String  @map("settings_id")
   weekday    Weekday
-  isClosed   Boolean  @default(false) @map("is_closed")
-  opensAt    String?  @map("opens_at") // "HH:mm"
-  closesAt   String?  @map("closes_at") // "HH:mm"
+  isClosed   Boolean @default(false) @map("is_closed")
+  opensAt    String? @map("opens_at") // "HH:mm"
+  closesAt   String? @map("closes_at") // "HH:mm"
 
   settings RestaurantSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
 
@@ -153,17 +282,17 @@ model OpeningHour {
 // ─── Menu domain ─────────────────────────────────────────────
 
 model Category {
-  id          String   @id @default(cuid())
-  slug        String   @unique
-  name        String
-  nameEn      String?  @map("name_en")
-  description String?
-  imageUrl    String?  @map("image_url")
-  imagePublicId String? @map("image_public_id") // Cloudinary id, for cleanup on replace/delete
-  sortOrder   Int      @default(0) @map("sort_order")
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  name          String
+  nameEn        String?  @map("name_en")
+  description   String?
+  imageUrl      String?  @map("image_url")
+  imagePublicId String?  @map("image_public_id") // Cloudinary id, for cleanup on replace/delete
+  sortOrder     Int      @default(0) @map("sort_order")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   items MenuItem[]
 
@@ -172,41 +301,46 @@ model Category {
 }
 
 model MenuItem {
-  id             String   @id @default(cuid())
-  categoryId     String   @map("category_id")
-  slug           String   @unique
-  name           String
-  nameEn         String?  @map("name_en")
-  description    String?
-  descriptionEn  String?  @map("description_en")
-  ingredients    String?
-  price          Decimal  @db.Decimal(10, 2)
-  discountPrice  Decimal? @map("discount_price") @db.Decimal(10, 2)
-  calories       Int?
-  allergens      String?  // comma-separated / freeform
-  spiceLevel     SpiceLevel @default(NONE) @map("spice_level")
-  isAvailable    Boolean  @default(true) @map("is_available")
-  isFeatured     Boolean  @default(false) @map("is_featured")
-  isBestSeller   Boolean  @default(false) @map("is_best_seller")
-  isNew          Boolean  @default(false) @map("is_new")
-  isVegetarian   Boolean  @default(false) @map("is_vegetarian")
-  isChefRecommendation Boolean @default(false) @map("is_chef_recommendation")
+  id                   String     @id @default(cuid())
+  categoryId           String     @map("category_id")
+  slug                 String     @unique
+  name                 String
+  nameEn               String?    @map("name_en")
+  description          String?
+  descriptionEn        String?    @map("description_en")
+  ingredients          String?
+  price                Decimal    @db.Decimal(10, 2)
+  discountPrice        Decimal?   @map("discount_price") @db.Decimal(10, 2)
+  calories             Int?
+  allergens            String? // comma-separated / freeform
+  spiceLevel           SpiceLevel @default(NONE) @map("spice_level")
+  isAvailable          Boolean    @default(true) @map("is_available")
+  isFeatured           Boolean    @default(false) @map("is_featured")
+  isBestSeller         Boolean    @default(false) @map("is_best_seller")
+  isNew                Boolean    @default(false) @map("is_new")
+  isVegetarian         Boolean    @default(false) @map("is_vegetarian")
+  isChefRecommendation Boolean    @default(false) @map("is_chef_recommendation")
   // Soft-hide: archived items are excluded from public + default admin lists,
   // but retained and restorable (Task 22: hide without deleting).
-  isArchived     Boolean  @default(false) @map("is_archived")
+  isArchived           Boolean    @default(false) @map("is_archived")
   // Scheduling windows (Task 22). Null = no schedule (respect the boolean flag).
-  featuredFrom   DateTime? @map("featured_from")
-  featuredUntil  DateTime? @map("featured_until")
-  promoFrom      DateTime? @map("promo_from")
-  promoUntil     DateTime? @map("promo_until")
-  viewCount      Int      @default(0) @map("view_count")
-  sortOrder      Int      @default(0) @map("sort_order")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  featuredFrom         DateTime?  @map("featured_from")
+  featuredUntil        DateTime?  @map("featured_until")
+  promoFrom            DateTime?  @map("promo_from")
+  promoUntil           DateTime?  @map("promo_until")
+  viewCount            Int        @default(0) @map("view_count")
+  sortOrder            Int        @default(0) @map("sort_order")
+  createdAt            DateTime   @default(now()) @map("created_at")
+  updatedAt            DateTime   @updatedAt @map("updated_at")
 
   category Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   images   ItemImage[]
   tags     ItemTag[]
+
+  modifierGroupLinks     MenuItemModifierGroup[]
+  orderItems             OrderItem[]
+  invoiceLines           InvoiceLine[]
+  invoiceAllocationLines InvoiceAllocationLine[]
 
   @@index([categoryId, sortOrder])
   @@index([isAvailable])
@@ -217,14 +351,14 @@ model MenuItem {
 }
 
 model ItemImage {
-  id         String   @id @default(cuid())
-  itemId     String   @map("item_id")
-  url        String
-  publicId   String?  @map("public_id") // Cloudinary public_id for deletion
-  alt        String?
-  sortOrder  Int      @default(0) @map("sort_order")
-  isPrimary  Boolean  @default(false) @map("is_primary")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id        String   @id @default(cuid())
+  itemId    String   @map("item_id")
+  url       String
+  publicId  String?  @map("public_id") // Cloudinary public_id for deletion
+  alt       String?
+  sortOrder Int      @default(0) @map("sort_order")
+  isPrimary Boolean  @default(false) @map("is_primary")
+  createdAt DateTime @default(now()) @map("created_at")
 
   item MenuItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
@@ -237,7 +371,7 @@ model Tag {
   slug      String   @unique
   label     String
   labelEn   String?  @map("label_en")
-  color     String?  // optional hex override for the chip
+  color     String? // optional hex override for the chip
   createdAt DateTime @default(now()) @map("created_at")
 
   items ItemTag[]
@@ -261,37 +395,714 @@ model ItemTag {
 // ─── Audit ───────────────────────────────────────────────────
 
 model ActivityLog {
-  id         String   @id @default(cuid())
-  adminId    String?  @map("admin_id")
-  action     ActivityAction
-  entityType String   @map("entity_type") // "MenuItem" | "Category" | ...
-  entityId   String?  @map("entity_id")
-  summary    String?
-  metadata   Json?
-  ip         String?
-  createdAt  DateTime @default(now()) @map("created_at")
+  id                String         @id @default(cuid())
+  adminId           String?        @map("admin_id")
+  actorNameSnapshot String?        @map("actor_name_snapshot")
+  actorRoleSnapshot String?        @map("actor_role_snapshot")
+  action            ActivityAction
+  entityType        String         @map("entity_type") // "MenuItem" | "Category" | ...
+  entityId          String?        @map("entity_id")
+  operationId       String?        @map("operation_id")
+  deviceId          String?        @map("device_id")
+  reason            String?
+  summary           String?
+  metadata          Json?
+  beforeData        Json?          @map("before_data")
+  afterData         Json?          @map("after_data")
+  ip                String?
+  createdAt         DateTime       @default(now()) @map("created_at")
 
   admin Admin? @relation(fields: [adminId], references: [id], onDelete: SetNull)
 
   @@index([adminId])
   @@index([entityType, entityId])
+  @@index([operationId])
+  @@index([deviceId])
   @@index([createdAt])
   @@map("activity_logs")
+}
+
+// Append-only catalog change feed. `revision` is both the global catalog
+// version and the future pull cursor; deleted/deactivated rows remain as
+// tombstones even when their source record no longer exists.
+model CatalogChange {
+  revision   BigInt              @id @default(autoincrement())
+  entityType String              @map("entity_type")
+  entityId   String              @map("entity_id")
+  action     CatalogChangeAction
+  payload    Json?
+  createdAt  DateTime            @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("catalog_changes")
+}
+
+// ─── POS device and dining-room configuration ───────────────
+
+model PosDevice {
+  id         String    @id @default(uuid()) @db.Uuid
+  code       String    @unique
+  name       String
+  isActive   Boolean   @default(true) @map("is_active")
+  pairedAt   DateTime  @default(now()) @map("paired_at")
+  lastSeenAt DateTime? @map("last_seen_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  orders             Order[]
+  invoices           Invoice[]
+  payments           Payment[]
+  invoiceVoids       InvoiceVoid[]
+  refunds            Refund[]
+  cashierShifts      CashierShift[]
+  receiptPrintEvents ReceiptPrintEvent[]
+  syncOperations     SyncOperation[]
+
+  @@index([isActive])
+  @@map("pos_devices")
+}
+
+model DiningTable {
+  id          String            @id @default(uuid()) @db.Uuid
+  code        String            @unique
+  displayName String?           @map("display_name")
+  capacity    Int?
+  sortOrder   Int               @default(0) @map("sort_order")
+  status      DiningTableStatus @default(AVAILABLE)
+  isActive    Boolean           @default(true) @map("is_active")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  orderAssignments OrderTableAssignment[]
+  invoiceSnapshots InvoiceTableSnapshot[]
+  reservations     ReservationTable[]
+
+  @@index([status, isActive])
+  @@index([isActive, sortOrder])
+  @@map("dining_tables")
+}
+
+// ─── Orders and immutable catalog snapshots ─────────────────
+
+model Order {
+  id                   String      @id @default(uuid()) @db.Uuid
+  status               OrderStatus @default(OPEN)
+  version              Int         @default(1)
+  guestCount           Int?        @map("guest_count")
+  notes                String?
+  businessDate         DateTime    @map("business_date") @db.Date
+  openedById           String?     @map("opened_by_id")
+  openedByNameSnapshot String      @map("opened_by_name_snapshot")
+  openedByRoleSnapshot String      @map("opened_by_role_snapshot")
+  deviceId             String      @map("device_id") @db.Uuid
+  mergedIntoOrderId    String?     @map("merged_into_order_id") @db.Uuid
+  openedAt             DateTime    @default(now()) @map("opened_at")
+  closedAt             DateTime?   @map("closed_at")
+  createdAt            DateTime    @default(now()) @map("created_at")
+  updatedAt            DateTime    @updatedAt @map("updated_at")
+
+  openedBy     Admin?                 @relation("OrderOpenedBy", fields: [openedById], references: [id], onDelete: SetNull)
+  device       PosDevice              @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  mergedInto   Order?                 @relation("OrderMerge", fields: [mergedIntoOrderId], references: [id], onDelete: Restrict)
+  mergedOrders Order[]                @relation("OrderMerge")
+  tables       OrderTableAssignment[]
+  items        OrderItem[]
+  discounts    OrderDiscount[]
+  invoiceLinks InvoiceOrder[]
+
+  @@index([status, businessDate])
+  @@index([businessDate, openedAt])
+  @@index([deviceId, status])
+  @@index([openedById, openedAt])
+  @@index([mergedIntoOrderId])
+  @@map("orders")
+}
+
+model OrderTableAssignment {
+  id                     String    @id @default(uuid()) @db.Uuid
+  orderId                String    @map("order_id") @db.Uuid
+  tableId                String    @map("table_id") @db.Uuid
+  assignedById           String?   @map("assigned_by_id")
+  assignedByNameSnapshot String    @map("assigned_by_name_snapshot")
+  assignedByRoleSnapshot String    @map("assigned_by_role_snapshot")
+  releasedById           String?   @map("released_by_id")
+  releasedByNameSnapshot String?   @map("released_by_name_snapshot")
+  releasedByRoleSnapshot String?   @map("released_by_role_snapshot")
+  assignedAt             DateTime  @default(now()) @map("assigned_at")
+  releasedAt             DateTime? @map("released_at")
+  isPrimary              Boolean   @default(false) @map("is_primary")
+
+  order      Order       @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  table      DiningTable @relation(fields: [tableId], references: [id], onDelete: Restrict)
+  assignedBy Admin?      @relation("TableAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+  releasedBy Admin?      @relation("TableReleasedBy", fields: [releasedById], references: [id], onDelete: SetNull)
+
+  @@index([orderId, releasedAt])
+  @@index([tableId, releasedAt])
+  @@index([assignedById])
+  @@index([releasedById])
+  @@map("order_table_assignments")
+}
+
+model OrderItem {
+  id                 String   @id @default(uuid()) @db.Uuid
+  orderId            String   @map("order_id") @db.Uuid
+  menuItemId         String?  @map("menu_item_id")
+  itemNameSnapshot   String   @map("item_name_snapshot")
+  itemNameEnSnapshot String?  @map("item_name_en_snapshot")
+  unitPriceMinor     BigInt   @map("unit_price_minor") @db.BigInt
+  quantity           Int
+  lineTotalMinor     BigInt   @map("line_total_minor") @db.BigInt
+  notes              String?
+  sortOrder          Int      @default(0) @map("sort_order")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  order                  Order                   @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  menuItem               MenuItem?               @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  modifiers              OrderItemModifier[]
+  invoiceLines           InvoiceLine[]
+  invoiceAllocationLines InvoiceAllocationLine[]
+
+  @@index([orderId, sortOrder])
+  @@index([menuItemId])
+  @@map("order_items")
+}
+
+model OrderItemModifier {
+  id                   String            @id @default(uuid()) @db.Uuid
+  orderItemId          String            @map("order_item_id") @db.Uuid
+  modifierOptionId     String?           @map("modifier_option_id") @db.Uuid
+  groupNameSnapshot    String            @map("group_name_snapshot")
+  groupNameEnSnapshot  String?           @map("group_name_en_snapshot")
+  optionNameSnapshot   String            @map("option_name_snapshot")
+  optionNameEnSnapshot String?           @map("option_name_en_snapshot")
+  priceTypeSnapshot    ModifierPriceType @map("price_type_snapshot")
+  unitPriceMinor       BigInt            @map("unit_price_minor") @db.BigInt
+  quantity             Int               @default(1)
+  lineTotalMinor       BigInt            @map("line_total_minor") @db.BigInt
+  createdAt            DateTime          @default(now()) @map("created_at")
+
+  orderItem      OrderItem       @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  modifierOption ModifierOption? @relation(fields: [modifierOptionId], references: [id], onDelete: SetNull)
+
+  @@index([orderItemId])
+  @@index([modifierOptionId])
+  @@map("order_item_modifiers")
+}
+
+model OrderDiscount {
+  id                    String       @id @default(uuid()) @db.Uuid
+  orderId               String       @map("order_id") @db.Uuid
+  type                  DiscountType
+  percentageBasisPoints Int?         @map("percentage_basis_points")
+  fixedAmountMinor      BigInt?      @map("fixed_amount_minor") @db.BigInt
+  calculatedAmountMinor BigInt       @map("calculated_amount_minor") @db.BigInt
+  reason                String
+  actorId               String?      @map("actor_id")
+  actorNameSnapshot     String       @map("actor_name_snapshot")
+  actorRoleSnapshot     String       @map("actor_role_snapshot")
+  createdAt             DateTime     @default(now()) @map("created_at")
+
+  order Order  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  actor Admin? @relation("OrderDiscountActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, createdAt])
+  @@index([actorId])
+  @@map("order_discounts")
+}
+
+// ─── Modifier catalog ────────────────────────────────────────
+
+model ModifierGroup {
+  id            String            @id @default(uuid()) @db.Uuid
+  type          ModifierGroupType
+  name          String
+  nameEn        String?           @map("name_en")
+  minSelections Int               @default(0) @map("min_selections")
+  maxSelections Int               @default(1) @map("max_selections")
+  isRequired    Boolean           @default(false) @map("is_required")
+  isActive      Boolean           @default(true) @map("is_active")
+  sortOrder     Int               @default(0) @map("sort_order")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  options   ModifierOption[]
+  menuItems MenuItemModifierGroup[]
+
+  @@index([isActive, sortOrder])
+  @@index([type, isActive])
+  @@map("modifier_groups")
+}
+
+model ModifierOption {
+  id        String            @id @default(uuid()) @db.Uuid
+  groupId   String            @map("group_id") @db.Uuid
+  name      String
+  nameEn    String?           @map("name_en")
+  priceType ModifierPriceType @default(DELTA) @map("price_type")
+  price     Decimal           @default(0) @db.Decimal(10, 2)
+  isActive  Boolean           @default(true) @map("is_active")
+  sortOrder Int               @default(0) @map("sort_order")
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  group                          ModifierGroup                   @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  orderItemModifiers             OrderItemModifier[]
+  invoiceLineModifiers           InvoiceLineModifier[]
+  invoiceAllocationLineModifiers InvoiceAllocationLineModifier[]
+
+  @@index([groupId, isActive, sortOrder])
+  @@map("modifier_options")
+}
+
+model MenuItemModifierGroup {
+  id         String @id @default(uuid()) @db.Uuid
+  menuItemId String @map("menu_item_id")
+  groupId    String @map("group_id") @db.Uuid
+  sortOrder  Int    @default(0) @map("sort_order")
+
+  menuItem MenuItem      @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  group    ModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([menuItemId, groupId])
+  @@index([groupId])
+  @@map("menu_item_modifier_groups")
+}
+
+// ─── Invoices, payments, discounts, voids and refunds ───────
+
+model Invoice {
+  id                  String            @id @default(uuid()) @db.Uuid
+  invoiceNumber       String            @unique @map("invoice_number")
+  status              InvoiceStatus     @default(OPEN)
+  currencySnapshot    String            @default("ILS") @map("currency_snapshot")
+  businessDate        DateTime          @map("business_date") @db.Date
+  subtotalMinor       BigInt            @map("subtotal_minor") @db.BigInt
+  discountMinor       BigInt            @default(0) @map("discount_minor") @db.BigInt
+  totalMinor          BigInt            @map("total_minor") @db.BigInt
+  refundedMinor       BigInt            @default(0) @map("refunded_minor") @db.BigInt
+  splitGroupId        String?           @map("split_group_id") @db.Uuid
+  splitMode           InvoiceSplitMode? @map("split_mode")
+  splitIndex          Int?              @map("split_index")
+  splitCount          Int?              @map("split_count")
+  cashierId           String?           @map("cashier_id")
+  cashierNameSnapshot String            @map("cashier_name_snapshot")
+  cashierRoleSnapshot String            @map("cashier_role_snapshot")
+  deviceId            String            @map("device_id") @db.Uuid
+  issuedAt            DateTime          @default(now()) @map("issued_at")
+  paidAt              DateTime?         @map("paid_at")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  cashier         Admin?                  @relation("InvoiceCashier", fields: [cashierId], references: [id], onDelete: SetNull)
+  device          PosDevice               @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  orders          InvoiceOrder[]
+  tableSnapshots  InvoiceTableSnapshot[]
+  lines           InvoiceLine[]
+  allocationLines InvoiceAllocationLine[]
+  discounts       InvoiceDiscount[]
+  payments        Payment[]
+  void            InvoiceVoid?
+  refunds         Refund[]
+  printEvents     ReceiptPrintEvent[]
+
+  @@unique([splitGroupId, splitIndex])
+  @@index([status, businessDate])
+  @@index([businessDate, issuedAt])
+  @@index([deviceId, issuedAt])
+  @@index([cashierId, issuedAt])
+  @@index([splitGroupId])
+  @@map("invoices")
+}
+
+model InvoiceOrder {
+  id        String   @id @default(uuid()) @db.Uuid
+  invoiceId String   @map("invoice_id") @db.Uuid
+  orderId   String   @map("order_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@unique([invoiceId, orderId])
+  @@index([orderId])
+  @@map("invoice_orders")
+}
+
+model InvoiceTableSnapshot {
+  id                       String  @id @default(uuid()) @db.Uuid
+  invoiceId                String  @map("invoice_id") @db.Uuid
+  tableId                  String? @map("table_id") @db.Uuid
+  tableCodeSnapshot        String  @map("table_code_snapshot")
+  tableDisplayNameSnapshot String? @map("table_display_name_snapshot")
+  tableCapacitySnapshot    Int?    @map("table_capacity_snapshot")
+
+  invoice Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  table   DiningTable? @relation(fields: [tableId], references: [id], onDelete: Restrict)
+
+  @@index([invoiceId])
+  @@index([tableId])
+  @@map("invoice_table_snapshots")
+}
+
+model InvoiceLine {
+  id                 String   @id @default(uuid()) @db.Uuid
+  invoiceId          String   @map("invoice_id") @db.Uuid
+  orderItemId        String?  @map("order_item_id") @db.Uuid
+  menuItemId         String?  @map("menu_item_id")
+  itemNameSnapshot   String   @map("item_name_snapshot")
+  itemNameEnSnapshot String?  @map("item_name_en_snapshot")
+  unitPriceMinor     BigInt   @map("unit_price_minor") @db.BigInt
+  quantity           Int
+  subtotalMinor      BigInt   @map("subtotal_minor") @db.BigInt
+  discountMinor      BigInt   @default(0) @map("discount_minor") @db.BigInt
+  totalMinor         BigInt   @map("total_minor") @db.BigInt
+  notes              String?
+  sortOrder          Int      @default(0) @map("sort_order")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  invoice     Invoice               @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  orderItem   OrderItem?            @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  menuItem    MenuItem?             @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  modifiers   InvoiceLineModifier[]
+  refundLines RefundLine[]
+
+  @@index([invoiceId, sortOrder])
+  @@index([orderItemId])
+  @@index([menuItemId])
+  @@map("invoice_lines")
+}
+
+model InvoiceLineModifier {
+  id                   String            @id @default(uuid()) @db.Uuid
+  invoiceLineId        String            @map("invoice_line_id") @db.Uuid
+  modifierOptionId     String?           @map("modifier_option_id") @db.Uuid
+  groupNameSnapshot    String            @map("group_name_snapshot")
+  groupNameEnSnapshot  String?           @map("group_name_en_snapshot")
+  optionNameSnapshot   String            @map("option_name_snapshot")
+  optionNameEnSnapshot String?           @map("option_name_en_snapshot")
+  priceTypeSnapshot    ModifierPriceType @map("price_type_snapshot")
+  unitPriceMinor       BigInt            @map("unit_price_minor") @db.BigInt
+  quantity             Int               @default(1)
+  totalMinor           BigInt            @map("total_minor") @db.BigInt
+
+  invoiceLine    InvoiceLine     @relation(fields: [invoiceLineId], references: [id], onDelete: Restrict)
+  modifierOption ModifierOption? @relation(fields: [modifierOptionId], references: [id], onDelete: SetNull)
+
+  @@index([invoiceLineId])
+  @@index([modifierOptionId])
+  @@map("invoice_line_modifiers")
+}
+
+// Additive split ledger. Rational quantities live here so the original
+// positive-integer InvoiceLine contract remains untouched.
+model InvoiceAllocationLine {
+  id                  String   @id @default(uuid()) @db.Uuid
+  invoiceId           String   @map("invoice_id") @db.Uuid
+  orderItemId         String   @map("order_item_id") @db.Uuid
+  menuItemId          String?  @map("menu_item_id")
+  itemNameSnapshot    String   @map("item_name_snapshot")
+  itemNameEnSnapshot  String?  @map("item_name_en_snapshot")
+  unitPriceMinor      BigInt   @map("unit_price_minor") @db.BigInt
+  quantityNumerator   BigInt   @map("quantity_numerator") @db.BigInt
+  quantityDenominator BigInt   @map("quantity_denominator") @db.BigInt
+  subtotalMinor       BigInt   @map("subtotal_minor") @db.BigInt
+  discountMinor       BigInt   @default(0) @map("discount_minor") @db.BigInt
+  totalMinor          BigInt   @map("total_minor") @db.BigInt
+  notes               String?
+  sortOrder           Int      @default(0) @map("sort_order")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  invoice   Invoice                         @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  orderItem OrderItem                       @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  menuItem  MenuItem?                       @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  modifiers InvoiceAllocationLineModifier[]
+
+  @@unique([invoiceId, orderItemId])
+  @@index([invoiceId, sortOrder])
+  @@index([orderItemId])
+  @@index([menuItemId])
+  @@map("invoice_allocation_lines")
+}
+
+model InvoiceAllocationLineModifier {
+  id                      String            @id @default(uuid()) @db.Uuid
+  invoiceAllocationLineId String            @map("invoice_allocation_line_id") @db.Uuid
+  modifierOptionId        String?           @map("modifier_option_id") @db.Uuid
+  groupNameSnapshot       String            @map("group_name_snapshot")
+  groupNameEnSnapshot     String?           @map("group_name_en_snapshot")
+  optionNameSnapshot      String            @map("option_name_snapshot")
+  optionNameEnSnapshot    String?           @map("option_name_en_snapshot")
+  priceTypeSnapshot       ModifierPriceType @map("price_type_snapshot")
+  unitPriceMinor          BigInt            @map("unit_price_minor") @db.BigInt
+  quantity                Int               @default(1)
+  totalMinor              BigInt            @map("total_minor") @db.BigInt
+
+  invoiceAllocationLine InvoiceAllocationLine @relation(fields: [invoiceAllocationLineId], references: [id], onDelete: Restrict)
+  modifierOption        ModifierOption?       @relation(fields: [modifierOptionId], references: [id], onDelete: SetNull)
+
+  @@index([invoiceAllocationLineId])
+  @@index([modifierOptionId])
+  @@map("invoice_allocation_line_modifiers")
+}
+
+model InvoiceDiscount {
+  id                    String       @id @default(uuid()) @db.Uuid
+  invoiceId             String       @map("invoice_id") @db.Uuid
+  type                  DiscountType
+  percentageBasisPoints Int?         @map("percentage_basis_points")
+  fixedAmountMinor      BigInt?      @map("fixed_amount_minor") @db.BigInt
+  calculatedAmountMinor BigInt       @map("calculated_amount_minor") @db.BigInt
+  reason                String
+  actorId               String?      @map("actor_id")
+  actorNameSnapshot     String       @map("actor_name_snapshot")
+  actorRoleSnapshot     String       @map("actor_role_snapshot")
+  createdAt             DateTime     @default(now()) @map("created_at")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  actor   Admin?  @relation("InvoiceDiscountActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId, createdAt])
+  @@index([actorId])
+  @@map("invoice_discounts")
+}
+
+model Payment {
+  id                String        @id @default(uuid()) @db.Uuid
+  invoiceId         String        @map("invoice_id") @db.Uuid
+  method            PaymentMethod
+  status            PaymentStatus @default(COMPLETED)
+  amountMinor       BigInt        @map("amount_minor") @db.BigInt
+  tenderedMinor     BigInt?       @map("tendered_minor") @db.BigInt
+  changeMinor       BigInt?       @map("change_minor") @db.BigInt
+  actorId           String?       @map("actor_id")
+  actorNameSnapshot String        @map("actor_name_snapshot")
+  actorRoleSnapshot String        @map("actor_role_snapshot")
+  deviceId          String        @map("device_id") @db.Uuid
+  paidAt            DateTime      @default(now()) @map("paid_at")
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  invoice        Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  actor          Admin?          @relation("PaymentActor", fields: [actorId], references: [id], onDelete: SetNull)
+  device         PosDevice       @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  refundPayments RefundPayment[]
+
+  @@index([invoiceId, paidAt])
+  @@index([paidAt])
+  @@index([deviceId, paidAt])
+  @@index([actorId])
+  @@map("payments")
+}
+
+model InvoiceVoid {
+  id                String   @id @default(uuid()) @db.Uuid
+  invoiceId         String   @unique @map("invoice_id") @db.Uuid
+  reason            String
+  actorId           String?  @map("actor_id")
+  actorNameSnapshot String   @map("actor_name_snapshot")
+  actorRoleSnapshot String   @map("actor_role_snapshot")
+  deviceId          String   @map("device_id") @db.Uuid
+  operationId       String?  @map("operation_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  invoice Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  actor   Admin?    @relation("InvoiceVoidActor", fields: [actorId], references: [id], onDelete: SetNull)
+  device  PosDevice @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+
+  @@index([actorId])
+  @@index([deviceId, createdAt])
+  @@index([operationId])
+  @@map("invoice_voids")
+}
+
+model Refund {
+  id                String   @id @default(uuid()) @db.Uuid
+  invoiceId         String   @map("invoice_id") @db.Uuid
+  amountMinor       BigInt   @map("amount_minor") @db.BigInt
+  reason            String
+  actorId           String?  @map("actor_id")
+  actorNameSnapshot String   @map("actor_name_snapshot")
+  actorRoleSnapshot String   @map("actor_role_snapshot")
+  deviceId          String   @map("device_id") @db.Uuid
+  operationId       String?  @map("operation_id") @db.Uuid
+  refundedAt        DateTime @default(now()) @map("refunded_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  invoice  Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  actor    Admin?          @relation("RefundActor", fields: [actorId], references: [id], onDelete: SetNull)
+  device   PosDevice       @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  lines    RefundLine[]
+  payments RefundPayment[]
+
+  @@index([invoiceId, refundedAt])
+  @@index([refundedAt])
+  @@index([deviceId, refundedAt])
+  @@index([actorId])
+  @@index([operationId])
+  @@map("refunds")
+}
+
+model RefundLine {
+  id            String @id @default(uuid()) @db.Uuid
+  refundId      String @map("refund_id") @db.Uuid
+  invoiceLineId String @map("invoice_line_id") @db.Uuid
+  quantity      Int
+  amountMinor   BigInt @map("amount_minor") @db.BigInt
+
+  refund      Refund      @relation(fields: [refundId], references: [id], onDelete: Restrict)
+  invoiceLine InvoiceLine @relation(fields: [invoiceLineId], references: [id], onDelete: Restrict)
+
+  @@unique([refundId, invoiceLineId])
+  @@index([invoiceLineId])
+  @@map("refund_lines")
+}
+
+model RefundPayment {
+  id          String @id @default(uuid()) @db.Uuid
+  refundId    String @map("refund_id") @db.Uuid
+  paymentId   String @map("payment_id") @db.Uuid
+  amountMinor BigInt @map("amount_minor") @db.BigInt
+
+  refund  Refund  @relation(fields: [refundId], references: [id], onDelete: Restrict)
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@unique([refundId, paymentId])
+  @@index([paymentId])
+  @@map("refund_payments")
+}
+
+// ─── Reservations and cashier shifts ────────────────────────
+
+model Reservation {
+  id                    String            @id @default(uuid()) @db.Uuid
+  customerName          String            @map("customer_name")
+  phone                 String
+  guestCount            Int               @map("guest_count")
+  startsAt              DateTime          @map("starts_at")
+  endsAt                DateTime?         @map("ends_at")
+  notes                 String?
+  status                ReservationStatus @default(PENDING)
+  createdById           String?           @map("created_by_id")
+  createdByNameSnapshot String            @map("created_by_name_snapshot")
+  createdByRoleSnapshot String            @map("created_by_role_snapshot")
+  version               Int               @default(1)
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
+
+  createdBy Admin?             @relation("ReservationCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  tables    ReservationTable[]
+
+  @@index([status, startsAt])
+  @@index([startsAt])
+  @@index([phone])
+  @@index([createdById])
+  @@map("reservations")
+}
+
+model ReservationTable {
+  id                       String   @id @default(uuid()) @db.Uuid
+  reservationId            String   @map("reservation_id") @db.Uuid
+  tableId                  String   @map("table_id") @db.Uuid
+  tableCodeSnapshot        String   @map("table_code_snapshot")
+  tableDisplayNameSnapshot String?  @map("table_display_name_snapshot")
+  assignedAt               DateTime @default(now()) @map("assigned_at")
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  table       DiningTable @relation(fields: [tableId], references: [id], onDelete: Restrict)
+
+  @@unique([reservationId, tableId])
+  @@index([tableId])
+  @@map("reservation_tables")
+}
+
+model CashierShift {
+  id                     String             @id @default(uuid()) @db.Uuid
+  userId                 String?            @map("user_id")
+  userNameSnapshot       String             @map("user_name_snapshot")
+  userRoleSnapshot       String             @map("user_role_snapshot")
+  deviceId               String             @map("device_id") @db.Uuid
+  status                 CashierShiftStatus @default(OPEN)
+  businessDate           DateTime           @map("business_date") @db.Date
+  openingCashMinor       BigInt             @map("opening_cash_minor") @db.BigInt
+  cashSalesMinor         BigInt             @default(0) @map("cash_sales_minor") @db.BigInt
+  cashRefundsMinor       BigInt             @default(0) @map("cash_refunds_minor") @db.BigInt
+  expectedCashMinor      BigInt             @default(0) @map("expected_cash_minor") @db.BigInt
+  actualClosingCashMinor BigInt?            @map("actual_closing_cash_minor") @db.BigInt
+  differenceMinor        BigInt?            @map("difference_minor") @db.BigInt
+  openedAt               DateTime           @default(now()) @map("opened_at")
+  closedAt               DateTime?          @map("closed_at")
+  createdAt              DateTime           @default(now()) @map("created_at")
+  updatedAt              DateTime           @updatedAt @map("updated_at")
+
+  user   Admin?    @relation("CashierShiftUser", fields: [userId], references: [id], onDelete: SetNull)
+  device PosDevice @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+
+  @@index([userId, deviceId, status])
+  @@index([businessDate, status])
+  @@index([deviceId, openedAt])
+  @@map("cashier_shifts")
+}
+
+// ─── Printing audit and offline idempotency ──────────────────
+
+model ReceiptPrintEvent {
+  id                String           @id @default(uuid()) @db.Uuid
+  invoiceId         String           @map("invoice_id") @db.Uuid
+  deviceId          String           @map("device_id") @db.Uuid
+  actorId           String?          @map("actor_id")
+  actorNameSnapshot String           @map("actor_name_snapshot")
+  actorRoleSnapshot String           @map("actor_role_snapshot")
+  type              ReceiptPrintType
+  paperWidthMm      Int              @map("paper_width_mm")
+  profileName       String?          @map("profile_name")
+  createdAt         DateTime         @default(now()) @map("created_at")
+
+  invoice Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  device  PosDevice @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  actor   Admin?    @relation("ReceiptPrintActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId, createdAt])
+  @@index([deviceId, createdAt])
+  @@index([actorId])
+  @@map("receipt_print_events")
+}
+
+model SyncOperation {
+  operationId   String              @id @map("operation_id") @db.Uuid
+  deviceId      String              @map("device_id") @db.Uuid
+  localSequence BigInt              @map("local_sequence") @db.BigInt
+  requestHash   String              @map("request_hash")
+  operationType String              @map("operation_type")
+  status        SyncOperationStatus @default(PENDING)
+  result        Json?
+  errorCode     String?             @map("error_code")
+  errorMessage  String?             @map("error_message")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  processedAt   DateTime?           @map("processed_at")
+
+  device PosDevice @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+
+  @@unique([deviceId, localSequence])
+  @@index([deviceId, status, localSequence])
+  @@index([status, createdAt])
+  @@map("sync_operations")
 }
 
 // ─── Analytics (Task 22) ─────────────────────────────────────
 
 model AnalyticsEvent {
-  id         String   @id @default(cuid())
+  id         String             @id @default(cuid())
   type       AnalyticsEventType
-  itemId     String?  @map("item_id")
-  categoryId String?  @map("category_id")
+  itemId     String?            @map("item_id")
+  categoryId String?            @map("category_id")
   path       String?
   // Coarse anonymous visitor id (hashed, rotated daily) for unique-visitor counts.
-  visitorId  String?  @map("visitor_id")
-  userAgent  String?  @map("user_agent")
+  visitorId  String?            @map("visitor_id")
+  userAgent  String?            @map("user_agent")
   ip         String?
-  createdAt  DateTime @default(now()) @map("created_at")
+  createdAt  DateTime           @default(now()) @map("created_at")
 
   @@index([type, createdAt])
   @@index([itemId])

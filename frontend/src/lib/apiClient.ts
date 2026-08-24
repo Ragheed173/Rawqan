@@ -32,6 +32,8 @@ export const api: AxiosInstance = axios.create({
 
 api.interceptors.request.use((cfg: InternalAxiosRequestConfig) => {
   if (accessToken) cfg.headers.set('Authorization', `Bearer ${accessToken}`);
+  const deviceId = typeof localStorage !== 'undefined' ? localStorage.getItem('rawaqan_pos_device_id') : null;
+  if (deviceId && (cfg.url?.startsWith('/pos/') || cfg.url?.startsWith('/admin/pos/'))) cfg.headers.set('x-pos-device-id', deviceId);
   return cfg;
 });
 

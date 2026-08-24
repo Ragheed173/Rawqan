@@ -1,30 +1,36 @@
-import type { OpeningHour, RestaurantSettings, Weekday } from '@prisma/client';
-import { prisma } from '../../lib/prisma.js';
-import { deleteAssets } from '../../lib/cloudinary.js';
-import type { UpdateHoursInput, UpdateSettingsInput } from './settings.schemas.js';
+import type { OpeningHour, RestaurantSettings, Weekday } from "@prisma/client";
+import { prisma } from "../../lib/prisma.js";
+import { deleteAssets } from "../../lib/cloudinary.js";
+import type {
+  UpdateHoursInput,
+  UpdateSettingsInput,
+} from "./settings.schemas.js";
+import { getZonedDateTimeParts } from "../../domain/businessTime.js";
 
 const WEEK_ORDER: Weekday[] = [
-  'SUNDAY',
-  'MONDAY',
-  'TUESDAY',
-  'WEDNESDAY',
-  'THURSDAY',
-  'FRIDAY',
-  'SATURDAY',
+  "SUNDAY",
+  "MONDAY",
+  "TUESDAY",
+  "WEDNESDAY",
+  "THURSDAY",
+  "FRIDAY",
+  "SATURDAY",
 ];
 
 /** There is exactly one settings row; create it lazily on first access. */
 async function ensureSettings() {
-  const existing = await prisma.restaurantSettings.findFirst({ include: { openingHours: true } });
+  const existing = await prisma.restaurantSettings.findFirst({
+    include: { openingHours: true },
+  });
   if (existing) return existing;
   return prisma.restaurantSettings.create({
     data: {
       openingHours: {
         create: WEEK_ORDER.map((weekday) => ({
           weekday,
-          isClosed: weekday === 'MONDAY',
-          opensAt: '12:00',
-          closesAt: '23:59',
+          isClosed: weekday === "MONDAY",
+          opensAt: "12:00",
+          closesAt: "23:59",
         })),
       },
     },
@@ -33,22 +39,33 @@ async function ensureSettings() {
 }
 
 /** Computes whether the venue is open now from opening hours + manual override. */
-function computeIsOpen(settings: RestaurantSettings, hours: OpeningHour[]): boolean {
+function computeIsOpen(
+  settings: RestaurantSettings,
+  hours: OpeningHour[],
+): boolean {
   if (settings.isOpenOverride !== null) return settings.isOpenOverride;
   const now = new Date();
-  const today = WEEK_ORDER[now.getDay()];
+  const local = getZonedDateTimeParts(now, settings.timezone);
+  const localWeekday = new Date(
+    Date.UTC(local.year, local.month - 1, local.day),
+  ).getUTCDay();
+  const today = WEEK_ORDER[localWeekday];
   const slot = hours.find((h) => h.weekday === today);
   if (!slot || slot.isClosed || !slot.opensAt || !slot.closesAt) return false;
-  const cur = now.getHours() * 60 + now.getMinutes();
-  const [oh, om] = slot.opensAt.split(':').map(Number);
-  const [ch, cm] = slot.closesAt.split(':').map(Number);
+  const cur = local.hour * 60 + local.minute;
+  const [oh, om] = slot.opensAt.split(":").map(Number);
+  const [ch, cm] = slot.closesAt.split(":").map(Number);
   return cur >= oh * 60 + om && cur <= ch * 60 + cm;
 }
 
-function serialize(settings: RestaurantSettings & { openingHours: OpeningHour[] }) {
+function serialize(
+  settings: RestaurantSettings & { openingHours: OpeningHour[] },
+) {
   const hours = settings.openingHours
     .slice()
-    .sort((a, b) => WEEK_ORDER.indexOf(a.weekday) - WEEK_ORDER.indexOf(b.weekday));
+    .sort(
+      (a, b) => WEEK_ORDER.indexOf(a.weekday) - WEEK_ORDER.indexOf(b.weekday),
+    );
   return {
     id: settings.id,
     name: settings.name,
@@ -70,6 +87,9 @@ function serialize(settings: RestaurantSettings & { openingHours: OpeningHour[] 
     latitude: settings.latitude,
     longitude: settings.longitude,
     currency: settings.currency,
+    posCurrency: settings.posCurrency,
+    timezone: settings.timezone,
+    businessDayCutoff: settings.businessDayCutoff,
     footerText: settings.footerText,
     theme: {
       primary: settings.colorPrimary,
@@ -98,10 +118,18 @@ export async function update(input: UpdateSettingsInput) {
   const current = await ensureSettings();
   // Clean up replaced logo/cover assets (best-effort).
   const orphans: string[] = [];
-  if (input.logoPublicId !== undefined && current.logoPublicId && current.logoPublicId !== input.logoPublicId) {
+  if (
+    input.logoPublicId !== undefined &&
+    current.logoPublicId &&
+    current.logoPublicId !== input.logoPublicId
+  ) {
     orphans.push(current.logoPublicId);
   }
-  if (input.coverPublicId !== undefined && current.coverPublicId && current.coverPublicId !== input.coverPublicId) {
+  if (
+    input.coverPublicId !== undefined &&
+    current.coverPublicId &&
+    current.coverPublicId !== input.coverPublicId
+  ) {
     orphans.push(current.coverPublicId);
   }
   if (orphans.length) await deleteAssets(orphans);
@@ -119,9 +147,15 @@ export async function updateHours(input: UpdateHoursInput) {
   await prisma.$transaction(
     input.hours.map((h) =>
       prisma.openingHour.upsert({
-        where: { settingsId_weekday: { settingsId: current.id, weekday: h.weekday } },
+        where: {
+          settingsId_weekday: { settingsId: current.id, weekday: h.weekday },
+        },
         create: { settingsId: current.id, ...h },
-        update: { isClosed: h.isClosed, opensAt: h.opensAt, closesAt: h.closesAt },
+        update: {
+          isClosed: h.isClosed,
+          opensAt: h.opensAt,
+          closesAt: h.closesAt,
+        },
       }),
     ),
   );

@@ -1,12 +1,12 @@
-import type { Request, Response } from 'express';
-import { env, isProd } from '../../config/env.js';
-import { ttlToMs } from '../../lib/tokens.js';
-import { recordActivity } from '../../lib/activityLog.js';
-import { sendSuccess } from '../../utils/http.js';
-import { ApiError } from '../../utils/ApiError.js';
-import * as authService from './auth.service.js';
+import type { Request, Response } from "express";
+import { env, isProd } from "../../config/env.js";
+import { ttlToMs } from "../../lib/tokens.js";
+import { recordActivity } from "../../lib/activityLog.js";
+import { sendSuccess } from "../../utils/http.js";
+import { ApiError } from "../../utils/ApiError.js";
+import * as authService from "./auth.service.js";
 
-const REFRESH_COOKIE = 'rawaqan_rt';
+const REFRESH_COOKIE = "rawaqan_rt";
 
 // Cross-site in production: the SPA (Vercel) and API (Render) are different
 // sites, so the refresh cookie must be SameSite=None; Secure to be sent on
@@ -14,12 +14,15 @@ const REFRESH_COOKIE = 'rawaqan_rt';
 const cookieOptions = {
   httpOnly: true as const,
   secure: isProd,
-  sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
-  path: '/api/auth',
+  sameSite: (isProd ? "none" : "lax") as "none" | "lax",
+  path: "/api/auth",
 };
 
 function setRefreshCookie(res: Response, token: string) {
-  res.cookie(REFRESH_COOKIE, token, { ...cookieOptions, maxAge: ttlToMs(env.JWT_REFRESH_TTL) });
+  res.cookie(REFRESH_COOKIE, token, {
+    ...cookieOptions,
+    maxAge: ttlToMs(env.JWT_REFRESH_TTL),
+  });
 }
 
 function clearRefreshCookie(res: Response) {
@@ -27,7 +30,7 @@ function clearRefreshCookie(res: Response) {
 }
 
 function sessionCtx(req: Request) {
-  return { userAgent: req.headers['user-agent'], ip: req.ip };
+  return { userAgent: req.headers["user-agent"], ip: req.ip };
 }
 
 export async function login(req: Request, res: Response) {
@@ -36,20 +39,28 @@ export async function login(req: Request, res: Response) {
   setRefreshCookie(res, result.refreshToken);
   recordActivity({
     adminId: result.admin.id,
-    action: 'LOGIN',
-    entityType: 'Admin',
+    actorNameSnapshot: result.admin.name,
+    actorRoleSnapshot: result.admin.role,
+    action: "LOGIN",
+    entityType: "Admin",
     entityId: result.admin.id,
     ip: req.ip,
   });
-  return sendSuccess(res, { admin: result.admin, accessToken: result.accessToken });
+  return sendSuccess(res, {
+    admin: result.admin,
+    accessToken: result.accessToken,
+  });
 }
 
 export async function refresh(req: Request, res: Response) {
   const raw = req.cookies?.[REFRESH_COOKIE] as string | undefined;
-  if (!raw) throw ApiError.unauthorized('No active session');
+  if (!raw) throw ApiError.unauthorized("No active session");
   const result = await authService.refresh(raw, sessionCtx(req));
   setRefreshCookie(res, result.refreshToken);
-  return sendSuccess(res, { admin: result.admin, accessToken: result.accessToken });
+  return sendSuccess(res, {
+    admin: result.admin,
+    accessToken: result.accessToken,
+  });
 }
 
 export async function logout(req: Request, res: Response) {
@@ -57,9 +68,14 @@ export async function logout(req: Request, res: Response) {
   await authService.logout(raw);
   clearRefreshCookie(res);
   if (req.admin) {
-    recordActivity({ adminId: req.admin.sub, action: 'LOGOUT', entityType: 'Admin', ip: req.ip });
+    recordActivity({
+      adminId: req.admin.sub,
+      action: "LOGOUT",
+      entityType: "Admin",
+      ip: req.ip,
+    });
   }
-  return sendSuccess(res, { message: 'Logged out' });
+  return sendSuccess(res, { message: "Logged out" });
 }
 
 export async function me(req: Request, res: Response) {

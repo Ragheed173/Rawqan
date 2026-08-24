@@ -1,4 +1,4 @@
-import { api, unwrap } from '@/lib/apiClient';
+import { api, unwrap } from "@/lib/apiClient";
 import type {
   ActivityLogEntry,
   AdminUser,
@@ -9,7 +9,7 @@ import type {
   MenuItem,
   RestaurantSettings,
   Tag,
-} from '@/types';
+} from "@/types";
 
 // ─── Categories ──────────────────────────────────────────────
 export interface CategoryInput {
@@ -22,13 +22,14 @@ export interface CategoryInput {
 }
 
 export const adminCategoryService = {
-  list: () => unwrap<Category[]>(api.get('/admin/categories')),
-  create: (data: CategoryInput) => unwrap<Category>(api.post('/admin/categories', data)),
+  list: () => unwrap<Category[]>(api.get("/admin/categories")),
+  create: (data: CategoryInput) =>
+    unwrap<Category>(api.post("/admin/categories", data)),
   update: (id: string, data: Partial<CategoryInput>) =>
     unwrap<Category>(api.patch(`/admin/categories/${id}`, data)),
   remove: (id: string) => api.delete(`/admin/categories/${id}`),
   reorder: (order: { id: string; sortOrder: number }[]) =>
-    unwrap<Category[]>(api.patch('/admin/categories/reorder', { order })),
+    unwrap<Category[]>(api.patch("/admin/categories/reorder", { order })),
 };
 
 // ─── Items / Meals ───────────────────────────────────────────
@@ -43,7 +44,7 @@ export interface ItemInput {
   discountPrice?: number | null;
   calories?: number | null;
   allergens?: string | null;
-  spiceLevel?: 'NONE' | 'MILD' | 'MEDIUM' | 'HOT';
+  spiceLevel?: "NONE" | "MILD" | "MEDIUM" | "HOT";
   isAvailable?: boolean;
   isFeatured?: boolean;
   isBestSeller?: boolean;
@@ -73,14 +74,16 @@ export interface PagedItems {
 
 export const adminItemService = {
   list: async (params: ItemListParams = {}): Promise<PagedItems> => {
-    const res = await api.get('/admin/items', { params });
+    const res = await api.get("/admin/items", { params });
     return res.data as PagedItems;
   },
   get: (id: string) => unwrap<MenuItem>(api.get(`/admin/items/${id}`)),
-  create: (data: ItemInput) => unwrap<MenuItem>(api.post('/admin/items', data)),
-  update: (id: string, data: Partial<ItemInput>) => unwrap<MenuItem>(api.patch(`/admin/items/${id}`, data)),
+  create: (data: ItemInput) => unwrap<MenuItem>(api.post("/admin/items", data)),
+  update: (id: string, data: Partial<ItemInput>) =>
+    unwrap<MenuItem>(api.patch(`/admin/items/${id}`, data)),
   remove: (id: string) => api.delete(`/admin/items/${id}`),
-  duplicate: (id: string) => unwrap<MenuItem>(api.post(`/admin/items/${id}/duplicate`)),
+  duplicate: (id: string) =>
+    unwrap<MenuItem>(api.post(`/admin/items/${id}/duplicate`)),
 };
 
 // ─── Image uploads ───────────────────────────────────────────
@@ -88,45 +91,52 @@ export const adminUploadService = {
   /** Generic single upload → { url, publicId }. Used for logos/covers/category images. */
   uploadOne: (file: File, folder?: string) => {
     const form = new FormData();
-    form.append('file', file);
-    if (folder) form.append('folder', folder);
+    form.append("file", file);
+    if (folder) form.append("folder", folder);
     return unwrap<{ url: string; publicId: string }>(
-      api.post('/admin/uploads', form, { headers: { 'Content-Type': 'multipart/form-data' } }),
+      api.post("/admin/uploads", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      }),
     );
   },
   uploadItemImages: (itemId: string, files: File[]) => {
     const form = new FormData();
-    files.forEach((f) => form.append('files', f));
+    files.forEach((f) => form.append("files", f));
     return unwrap<ItemImage[]>(
       api.post(`/admin/uploads/items/${itemId}/images`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: { "Content-Type": "multipart/form-data" },
       }),
     );
   },
-  deleteImage: (imageId: string) => api.delete(`/admin/uploads/images/${imageId}`),
-  setPrimary: (imageId: string) => api.patch(`/admin/uploads/images/${imageId}/primary`),
+  deleteImage: (imageId: string) =>
+    api.delete(`/admin/uploads/images/${imageId}`),
+  setPrimary: (imageId: string) =>
+    api.patch(`/admin/uploads/images/${imageId}/primary`),
 };
 
 // ─── Tags ────────────────────────────────────────────────────
 export const adminTagService = {
-  list: () => unwrap<Tag[]>(api.get('/admin/tags')),
-  create: (data: { label: string; labelEn?: string | null; color?: string | null }) =>
-    unwrap<Tag>(api.post('/admin/tags', data)),
+  list: () => unwrap<Tag[]>(api.get("/admin/tags")),
+  create: (data: {
+    label: string;
+    labelEn?: string | null;
+    color?: string | null;
+  }) => unwrap<Tag>(api.post("/admin/tags", data)),
   remove: (id: string) => api.delete(`/admin/tags/${id}`),
 };
 
 // ─── Settings ────────────────────────────────────────────────
 export const adminSettingsService = {
-  get: () => unwrap<RestaurantSettings>(api.get('/admin/settings')),
+  get: () => unwrap<RestaurantSettings>(api.get("/admin/settings")),
   update: (data: Record<string, unknown>) =>
-    unwrap<RestaurantSettings>(api.patch('/admin/settings', data)),
-  updateHours: (hours: RestaurantSettings['openingHours']) =>
-    unwrap<RestaurantSettings>(api.patch('/admin/settings/hours', { hours })),
+    unwrap<RestaurantSettings>(api.patch("/admin/settings", data)),
+  updateHours: (hours: RestaurantSettings["openingHours"]) =>
+    unwrap<RestaurantSettings>(api.patch("/admin/settings/hours", { hours })),
 };
 
 // ─── Dashboard ───────────────────────────────────────────────
 export const adminDashboardService = {
-  stats: () => unwrap<DashboardStats>(api.get('/admin/dashboard/stats')),
+  stats: () => unwrap<DashboardStats>(api.get("/admin/dashboard/stats")),
 };
 
 // ─── QR codes ────────────────────────────────────────────────
@@ -139,13 +149,16 @@ export const adminQrService = {
   /** Authorized preview → base64 data URL (safe for <img src>). */
   preview: (params: QrParams) =>
     unwrap<{ target: string; dataUrl: string }>(
-      api.get('/admin/qr', { params: { ...params, format: 'json' } }),
+      api.get("/admin/qr", { params: { ...params, format: "json" } }),
     ),
   /** Authorized file download as a Blob (png/svg/pdf). */
-  download: async (format: 'png' | 'svg' | 'pdf', params: QrParams): Promise<Blob> => {
-    const res = await api.get('/admin/qr', {
+  download: async (
+    format: "png" | "svg" | "pdf",
+    params: QrParams,
+  ): Promise<Blob> => {
+    const res = await api.get("/admin/qr", {
       params: { ...params, format },
-      responseType: 'blob',
+      responseType: "blob",
     });
     return res.data as Blob;
   },
@@ -153,7 +166,8 @@ export const adminQrService = {
 
 // ─── Analytics ───────────────────────────────────────────────
 export const adminAnalyticsService = {
-  summary: (days = 30) => unwrap<AnalyticsSummary>(api.get('/admin/analytics', { params: { days } })),
+  summary: (days = 30) =>
+    unwrap<AnalyticsSummary>(api.get("/admin/analytics", { params: { days } })),
 };
 
 // ─── Admin users (RBAC) ──────────────────────────────────────
@@ -161,15 +175,21 @@ export interface AdminInput {
   email: string;
   name: string;
   password: string;
-  role: 'SUPER_ADMIN' | 'MANAGER' | 'STAFF';
+  role: "SUPER_ADMIN" | "MANAGER" | "STAFF" | "CASHIER";
 }
 
 export const adminUserService = {
-  list: () => unwrap<AdminUser[]>(api.get('/admin/admins')),
-  roles: () => unwrap<{ value: string; label: string }[]>(api.get('/admin/admins/roles')),
-  create: (data: AdminInput) => unwrap<AdminUser>(api.post('/admin/admins', data)),
-  update: (id: string, data: Partial<Omit<AdminInput, 'email'>> & { isActive?: boolean }) =>
-    unwrap<AdminUser>(api.patch(`/admin/admins/${id}`, data)),
+  list: () => unwrap<AdminUser[]>(api.get("/admin/admins")),
+  roles: () =>
+    unwrap<{ value: string; label: string }[]>(api.get("/admin/admins/roles")),
+  create: (data: AdminInput) =>
+    unwrap<AdminUser>(api.post("/admin/admins", data)),
+  update: (
+    id: string,
+    data: Partial<Omit<AdminInput, "email">> & { isActive?: boolean },
+  ) => unwrap<AdminUser>(api.patch(`/admin/admins/${id}`, data)),
+  deactivate: (id: string) =>
+    unwrap<AdminUser>(api.post(`/admin/admins/${id}/deactivate`)),
   remove: (id: string) => api.delete(`/admin/admins/${id}`),
 };
 
@@ -180,8 +200,10 @@ export interface LogsResponse {
 }
 
 export const adminLogsService = {
-  list: async (params: { page?: number; action?: string; entityType?: string } = {}) => {
-    const res = await api.get('/admin/logs', { params });
+  list: async (
+    params: { page?: number; action?: string; entityType?: string } = {},
+  ) => {
+    const res = await api.get("/admin/logs", { params });
     return res.data as LogsResponse;
   },
 };
@@ -195,26 +217,38 @@ export interface ImportResult {
 }
 
 export const adminDataService = {
-  exportMenu: async (format: 'xlsx' | 'csv'): Promise<Blob> => {
-    const res = await api.get('/admin/menu/export', { params: { format }, responseType: 'blob' });
+  exportMenu: async (format: "xlsx" | "csv"): Promise<Blob> => {
+    const res = await api.get("/admin/menu/export", {
+      params: { format },
+      responseType: "blob",
+    });
     return res.data as Blob;
   },
   importMenu: (file: File) => {
     const form = new FormData();
-    form.append('file', file);
+    form.append("file", file);
     return unwrap<ImportResult>(
-      api.post('/admin/menu/import', form, { headers: { 'Content-Type': 'multipart/form-data' } }),
+      api.post("/admin/menu/import", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      }),
     );
   },
   downloadBackup: async (): Promise<Blob> => {
-    const res = await api.get('/admin/menu/backup', { responseType: 'blob' });
+    const res = await api.get("/admin/menu/backup", { responseType: "blob" });
     return res.data as Blob;
   },
   restoreBackup: (file: File) => {
     const form = new FormData();
-    form.append('file', file);
-    return unwrap<{ categories: number; items: number; images: number; tags: number }>(
-      api.post('/admin/menu/backup/restore', form, { headers: { 'Content-Type': 'multipart/form-data' } }),
+    form.append("file", file);
+    return unwrap<{
+      categories: number;
+      items: number;
+      images: number;
+      tags: number;
+    }>(
+      api.post("/admin/menu/backup/restore", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      }),
     );
   },
 };

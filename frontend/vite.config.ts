@@ -52,6 +52,7 @@ export default defineConfig({
   build: {
     target: 'es2020',
     sourcemap: false,
+    manifest: 'manifest.json',
     rollupOptions: {
       output: {
         // Function form: the array form only matched each package's root

@@ -11,6 +11,8 @@ import adminsRouter from './modules/admins/admins.routes.js';
 import { publicAnalyticsRouter, adminAnalyticsRouter } from './modules/analytics/analytics.routes.js';
 import dataRouter from './modules/data/data.routes.js';
 import logsRouter from './modules/logs/logs.routes.js';
+import posRouter, { adminPosRouter } from './modules/pos/pos.routes.js';
+import modifierRouter from './modules/menu/modifier.routes.js';
 
 export const apiRouter = Router();
 
@@ -22,11 +24,13 @@ apiRouter.use('/tags', publicTagRouter);
 apiRouter.use('/settings', publicSettingsRouter);
 apiRouter.use('/qr', publicQrRouter);
 apiRouter.use('/analytics', publicAnalyticsRouter);
+apiRouter.use('/pos', posRouter);
 
 // ─── Admin API (each router self-guards with requireAuth) ────
 apiRouter.use('/admin/categories', adminCategoryRouter);
 apiRouter.use('/admin/items', adminItemRouter);
 apiRouter.use('/admin/tags', adminTagRouter);
+apiRouter.use('/admin/modifiers', modifierRouter);
 apiRouter.use('/admin/settings', adminSettingsRouter);
 apiRouter.use('/admin/dashboard', dashboardRouter);
 apiRouter.use('/admin/uploads', uploadRouter);
@@ -35,3 +39,4 @@ apiRouter.use('/admin/admins', adminsRouter);
 apiRouter.use('/admin/analytics', adminAnalyticsRouter);
 apiRouter.use('/admin/menu', dataRouter);
 apiRouter.use('/admin/logs', logsRouter);
+apiRouter.use('/admin/pos', adminPosRouter);

@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs';
 import { prisma } from '../../lib/prisma.js';
 import { uniqueSlug } from '../../utils/slug.js';
 import { decimalToNumber } from '../../utils/serializers.js';
+import { recordCatalogChange } from '../menu/catalogRevision.js';
 
 const COLUMNS = [
   { header: 'Category', key: 'Category', width: 20 },
@@ -153,13 +154,15 @@ export async function importBuffer(buffer: Buffer): Promise<ImportResult> {
             prisma.category.findFirst({ where: { slug: s }, select: { id: true } }).then(Boolean),
           );
           const max = await prisma.category.aggregate({ _max: { sortOrder: true } });
-          const created = await prisma.category.create({
-            data: {
+          const created = await prisma.$transaction(async (tx) => {
+            const category = await tx.category.create({ data: {
               name: categoryName,
               nameEn: get(row, 'CategoryEn') || null,
               slug,
               sortOrder: (max._max.sortOrder ?? 0) + 1,
-            },
+            } });
+            await recordCatalogChange(tx, { entityType: 'Category', entityId: category.id, action: 'CREATED' });
+            return category;
           });
           categoryId = created.id;
           result.categoriesCreated++;
@@ -189,15 +192,19 @@ export async function importBuffer(buffer: Buffer): Promise<ImportResult> {
 
       const existingItem = await prisma.menuItem.findFirst({ where: { categoryId, name } });
       if (existingItem) {
-        await prisma.menuItem.update({ where: { id: existingItem.id }, data });
+        await prisma.$transaction(async (tx) => {
+          await tx.menuItem.update({ where: { id: existingItem.id }, data });
+          await recordCatalogChange(tx, { entityType: 'MenuItem', entityId: existingItem.id, action: 'UPDATED' });
+        });
         result.itemsUpdated++;
       } else {
         const slug = await uniqueSlug(get(row, 'NameEn') || name, (s) =>
           prisma.menuItem.findFirst({ where: { slug: s }, select: { id: true } }).then(Boolean),
         );
         const max = await prisma.menuItem.aggregate({ where: { categoryId }, _max: { sortOrder: true } });
-        await prisma.menuItem.create({
-          data: { ...data, categoryId, slug, sortOrder: (max._max.sortOrder ?? 0) + 1 },
+        await prisma.$transaction(async (tx) => {
+          const item = await tx.menuItem.create({ data: { ...data, categoryId, slug, sortOrder: (max._max.sortOrder ?? 0) + 1 } });
+          await recordCatalogChange(tx, { entityType: 'MenuItem', entityId: item.id, action: 'CREATED' });
         });
         result.itemsCreated++;
       }

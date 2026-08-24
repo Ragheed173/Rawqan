@@ -21,3 +21,13 @@ export const authLimiter = rateLimit({
     error: { code: 'RATE_LIMITED', message: 'Too many login attempts, try again later' },
   },
 });
+
+/** PIN/capability attempts are intentionally stricter than normal API traffic. */
+export const pinLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many PIN attempts' } },
+});

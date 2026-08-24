@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { ZodError } from 'zod';
 import { ApiError } from '../utils/ApiError.js';
 import { isProd } from '../config/env.js';
+import { PosDomainError } from '../domain/pos/errors.js';
 
 /** Terminal error handler → uniform JSON envelope. Must be registered last. */
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
@@ -11,7 +12,21 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   let message = 'Internal server error';
   let details: unknown;
 
-  if (err instanceof ApiError) {
+  if (err instanceof PosDomainError) {
+    const notFound = new Set(['TABLE_NOT_FOUND', 'ORDER_NOT_FOUND', 'INVOICE_NOT_FOUND']);
+    const forbidden = new Set(['DISCOUNT_NOT_ALLOWED', 'DEVICE_NOT_AUTHORIZED', 'PERMISSION_DENIED']);
+    const conflict = new Set([
+      'TABLE_OCCUPIED',
+      'VERSION_CONFLICT',
+      'SHIFT_ALREADY_OPEN',
+      'ALREADY_APPLIED',
+      'SYNC_CONFLICT',
+    ]);
+    status = notFound.has(err.code) ? 404 : forbidden.has(err.code) ? 403 : conflict.has(err.code) ? 409 : err.code === 'OFFLINE_CAPABILITY_EXPIRED' ? 401 : 400;
+    code = err.code;
+    message = err.message;
+    details = err.details;
+  } else if (err instanceof ApiError) {
     status = err.statusCode;
     code = err.code;
     message = err.message;

@@ -14,6 +14,7 @@ import {
   Database,
   ScrollText,
   Users,
+  MonitorSmartphone,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -40,6 +41,7 @@ const NAV: NavItem[] = [
   { to: '/admin/data', label: 'البيانات', icon: Database, permAny: ['import:manage', 'backup:manage'] },
   { to: '/admin/logs', label: 'السجل', icon: ScrollText, perm: 'logs:read' },
   { to: '/admin/admins', label: 'المستخدمون', icon: Users, perm: 'admin:manage' },
+  { to: '/admin/pos', label: 'نقاط البيع', icon: MonitorSmartphone, permAny: ['pos:table:configure', 'pos:reports:read', 'pos:device:manage'] },
   { to: '/admin/settings', label: 'الإعدادات', icon: Settings, perm: 'settings:write' },
 ];
 

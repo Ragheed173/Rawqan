@@ -1,4 +1,5 @@
 import type { Response } from 'express';
+import { toJsonSafe } from './json.js';
 
 /** Consistent success envelope: { success, data, meta? }. */
 export function sendSuccess<T>(
@@ -16,4 +17,14 @@ export function sendCreated<T>(res: Response, data: T, meta?: Record<string, unk
 
 export function sendNoContent(res: Response) {
   return res.status(204).send();
+}
+
+/** POS presenter: monetary BigInts are exact decimal strings in JSON. */
+export function sendPosSuccess<T>(
+  res: Response,
+  data: T,
+  status = 200,
+  meta?: Record<string, unknown>,
+) {
+  return sendSuccess(res, toJsonSafe(data), status, meta ? (toJsonSafe(meta) as Record<string, unknown>) : undefined);
 }

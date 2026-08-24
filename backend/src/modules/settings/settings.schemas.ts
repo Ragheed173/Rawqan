@@ -1,18 +1,19 @@
-import { z } from 'zod';
+import { z } from "zod";
+import { isValidTimeZone } from "../../domain/businessTime.js";
 
 const weekday = z.enum([
-  'SUNDAY',
-  'MONDAY',
-  'TUESDAY',
-  'WEDNESDAY',
-  'THURSDAY',
-  'FRIDAY',
-  'SATURDAY',
+  "SUNDAY",
+  "MONDAY",
+  "TUESDAY",
+  "WEDNESDAY",
+  "THURSDAY",
+  "FRIDAY",
+  "SATURDAY",
 ]);
 
 const time = z
   .string()
-  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected HH:mm')
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:mm")
   .optional()
   .nullable();
 
@@ -22,8 +23,8 @@ const time = z
  * (undefined) is allowed so the field can be omitted from a partial update.
  */
 const url = z.preprocess(
-  (v) => (v === '' ? null : v),
-  z.string().url({ message: 'Invalid URL' }).nullish(),
+  (v) => (v === "" ? null : v),
+  z.string().url({ message: "Invalid URL" }).nullish(),
 );
 
 export const updateSettingsSchema = z.object({
@@ -46,10 +47,35 @@ export const updateSettingsSchema = z.object({
   latitude: z.number().min(-90).max(90).optional().nullable(),
   longitude: z.number().min(-180).max(180).optional().nullable(),
   currency: z.string().min(1).max(8).optional(),
+  posCurrency: z
+    .string()
+    .regex(/^[A-Z]{3}$/, "Expected an ISO 4217 currency code")
+    .optional(),
+  timezone: z
+    .string()
+    .max(100)
+    .refine(isValidTimeZone, "Invalid IANA time zone")
+    .optional(),
+  businessDayCutoff: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:mm")
+    .optional(),
   footerText: z.string().max(500).optional().nullable(),
-  colorPrimary: z.string().regex(/^#([0-9a-fA-F]{6})$/).optional().nullable(),
-  colorAccent: z.string().regex(/^#([0-9a-fA-F]{6})$/).optional().nullable(),
-  colorBackground: z.string().regex(/^#([0-9a-fA-F]{6})$/).optional().nullable(),
+  colorPrimary: z
+    .string()
+    .regex(/^#([0-9a-fA-F]{6})$/)
+    .optional()
+    .nullable(),
+  colorAccent: z
+    .string()
+    .regex(/^#([0-9a-fA-F]{6})$/)
+    .optional()
+    .nullable(),
+  colorBackground: z
+    .string()
+    .regex(/^#([0-9a-fA-F]{6})$/)
+    .optional()
+    .nullable(),
   isOpenOverride: z.boolean().optional().nullable(),
   maintenanceMode: z.boolean().optional(),
   maintenanceMessage: z.string().max(500).optional().nullable(),

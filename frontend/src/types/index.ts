@@ -1,15 +1,15 @@
 /** Shared domain types — mirror the backend serializers. */
 
-export type SpiceLevel = 'NONE' | 'MILD' | 'MEDIUM' | 'HOT';
+export type SpiceLevel = "NONE" | "MILD" | "MEDIUM" | "HOT";
 
 export type Weekday =
-  | 'SUNDAY'
-  | 'MONDAY'
-  | 'TUESDAY'
-  | 'WEDNESDAY'
-  | 'THURSDAY'
-  | 'FRIDAY'
-  | 'SATURDAY';
+  | "SUNDAY"
+  | "MONDAY"
+  | "TUESDAY"
+  | "WEDNESDAY"
+  | "THURSDAY"
+  | "FRIDAY"
+  | "SATURDAY";
 
 export interface ItemImage {
   id: string;
@@ -111,8 +111,15 @@ export interface RestaurantSettings {
   latitude: number | null;
   longitude: number | null;
   currency: string;
+  posCurrency: string;
+  timezone: string;
+  businessDayCutoff: string;
   footerText: string | null;
-  theme: { primary: string | null; accent: string | null; background: string | null };
+  theme: {
+    primary: string | null;
+    accent: string | null;
+    background: string | null;
+  };
   isOpen: boolean;
   maintenanceMode: boolean;
   maintenanceMessage: string | null;
@@ -121,20 +128,31 @@ export interface RestaurantSettings {
   updatedAt: string;
 }
 
-export type AdminRole = 'SUPER_ADMIN' | 'MANAGER' | 'STAFF';
+export type AdminRole = "SUPER_ADMIN" | "MANAGER" | "STAFF" | "CASHIER";
 
 export type Permission =
-  | 'menu:read'
-  | 'menu:write'
-  | 'menu:delete'
-  | 'category:write'
-  | 'category:delete'
-  | 'settings:write'
-  | 'analytics:read'
-  | 'logs:read'
-  | 'import:manage'
-  | 'admin:manage'
-  | 'backup:manage';
+  | "menu:read"
+  | "menu:write"
+  | "menu:delete"
+  | "category:write"
+  | "category:delete"
+  | "settings:write"
+  | "analytics:read"
+  | "logs:read"
+  | "import:manage"
+  | "admin:manage"
+  | "backup:manage"
+  | "pos:operate"
+  | "pos:table:configure"
+  | "pos:discount"
+  | "pos:void"
+  | "pos:refund"
+  | "pos:receipt:reprint"
+  | "pos:reservation:manage"
+  | "pos:shift:self"
+  | "pos:reports:read"
+  | "pos:audit:read"
+  | "pos:device:manage";
 
 export interface AdminProfile {
   id: string;
@@ -159,10 +177,25 @@ export interface AdminUser {
 
 export interface AnalyticsSummary {
   range: { days: number; since: string };
-  totals: { views: number; visitors: number; visitorsToday: number; qrScans: number };
+  totals: {
+    views: number;
+    visitors: number;
+    visitorsToday: number;
+    qrScans: number;
+  };
   dailyVisitors: { date: string; visitors: number }[];
-  mostViewedItems: { id: string; name: string; viewCount: number; price: number; category: string }[];
-  popularCategories: { categoryId: string | null; name: string; views: number }[];
+  mostViewedItems: {
+    id: string;
+    name: string;
+    viewCount: number;
+    price: number;
+    category: string;
+  }[];
+  popularCategories: {
+    categoryId: string | null;
+    name: string;
+    views: number;
+  }[];
 }
 
 export interface ActivityLogEntry {
@@ -173,6 +206,12 @@ export interface ActivityLogEntry {
   summary: string | null;
   admin: string;
   adminEmail: string | null;
+  actorRoleSnapshot?: string | null;
+  operationId?: string | null;
+  deviceId?: string | null;
+  reason?: string | null;
+  beforeData?: unknown;
+  afterData?: unknown;
   ip: string | null;
   createdAt: string;
 }

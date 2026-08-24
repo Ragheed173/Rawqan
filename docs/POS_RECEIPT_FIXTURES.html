@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Rawaqan POS receipt fixtures</title>
+  <style>
+    :root { --paper: 80mm; font-family: "Arial", "Tahoma", sans-serif; color: #000; background: #ddd; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    .controls { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px; direction: ltr; background: #172033; color: #fff; }
+    .controls button, .controls select { min-height: 40px; padding: 6px 12px; font: inherit; }
+    .fixtures { display: grid; grid-template-columns: repeat(auto-fit, minmax(86mm, 1fr)); gap: 20px; padding: 20px; direction: ltr; align-items: start; }
+    .receipt { width: var(--paper); min-height: 70mm; margin: auto; padding: 3mm; direction: rtl; background: #fff; font-size: 12px; line-height: 1.4; box-shadow: 0 2px 12px #777; overflow-wrap: anywhere; }
+    .receipt h1, .receipt h2, .receipt p { margin: 0 0 4px; text-align: center; }
+    .receipt h1 { font-size: 18px; }
+    .receipt h2 { font-size: 14px; }
+    .rule { margin: 5px 0; border-top: 1px dashed #000; }
+    .row { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; }
+    .row span:first-child { min-width: 0; }
+    .modifier { padding-right: 8px; font-size: 10px; }
+    .total { font-weight: 700; font-size: 14px; }
+    .marker { margin: -3mm -3mm 5px; padding: 4px; text-align: center; background: #000; color: #fff; font-weight: 700; }
+    .fixture-title { direction: ltr; margin: 0 0 6px; font: 700 12px Arial,sans-serif; color: #333; }
+    @page { size: var(--paper) auto; margin: 0; }
+    @media print {
+      :root { background: #fff; }
+      .controls, .fixture-title { display: none !important; }
+      .fixtures { display: block; padding: 0; }
+      .receipt { display: none; box-shadow: none; margin: 0; }
+      .receipt.print-target { display: block; }
+    }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <strong>Paper:</strong>
+    <button type="button" onclick="setWidth(58)">58 mm</button>
+    <button type="button" onclick="setWidth(80)">80 mm</button>
+    <label for="fixture">Fixture:</label>
+    <select id="fixture"></select>
+    <button type="button" onclick="printFixture()">Print selected fixture</button>
+  </div>
+  <main class="fixtures" id="fixtures"></main>
+  <script>
+    const fixtures = [
+      { title: "1 — Normal cash invoice", number: "RWQ-P01-2026-000101", lines: [["حمص روقان", 2, 1800], ["قهوة عربية", 1, 1200]], subtotal: 4800, payments: [["نقدي", 4800]], tendered: 5000, change: 200 },
+      { title: "2 — Visa invoice", number: "RWQ-P01-2026-000102", lines: [["وجبة فطور روقان", 1, 6500], ["عصير برتقال", 2, 1400]], subtotal: 9300, payments: [["Visa", 9300]] },
+      { title: "3 — Cash + Visa split payment", number: "RWQ-P01-2026-000103", lines: [["صينية مشاوي مشكلة", 1, 12500], ["سلطة موسمية", 1, 2500]], subtotal: 15000, payments: [["نقدي", 6000], ["Visa", 9000]], tendered: 7000, change: 1000 },
+      { title: "4 — Large 20+ line invoice / page-break stress", number: "RWQ-P01-2026-000104", lines: Array.from({length: 24}, (_, i) => [`صنف تجريبي طويل رقم ${i + 1} لاختبار التفاف السطر`, (i % 3) + 1, 250 + i * 25]), subtotal: 0, payments: [["نقدي", 0]] },
+      { title: "5 — Equal split rational share", number: "RWQ-P01-2026-000105-2/3", split: "تقسيم متساوٍ — فاتورة 2 من 3", lines: [["طبق مشترك — الحصة 2/3", 1, 3333], ["مشروب — الحصة 1/3", 1, 667]], subtotal: 4000, payments: [["Visa", 4000]] },
+      { title: "6 — Arabic modifiers / long names", number: "RWQ-P01-2026-000106", lines: [["ساندويش دجاج مشوي بخبز الصاج مع اسم طويل جداً", 2, 3200, ["الحجم: كبير (+500)", "إضافة: جبنة عربية مدخنة (+250)", "إضافة: فطر وبصل مكرمل (+300)", "بدون مخلل — ملاحظة مطبخ"]]], subtotal: 8500, discount: 500, payments: [["نقدي", 8000]], tendered: 10000, change: 2000 },
+      { title: "7 — Reprint marking", number: "RWQ-P01-2026-000107", marker: "نسخة معاد طباعتها — REPRINT", lines: [["لاتيه", 1, 1800], ["كعكة تمر", 1, 2200]], subtotal: 4000, payments: [["Visa", 4000]] },
+    ];
+    const money = (minor) => `${(minor / 100).toFixed(2)} ₪`;
+    const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    const host = document.getElementById("fixtures");
+    const select = document.getElementById("fixture");
+    fixtures.forEach((fixture, index) => {
+      if (!fixture.subtotal) fixture.subtotal = fixture.lines.reduce((sum, line) => sum + line[1] * line[2], 0);
+      if (fixture.payments[0][1] === 0) fixture.payments[0][1] = fixture.subtotal;
+      const total = fixture.subtotal - (fixture.discount || 0);
+      const lineHtml = fixture.lines.map(([name, quantity, unit, modifiers = []]) =>
+        `<div class="row"><span>${quantity} × ${escapeHtml(name)}</span><span>${money(quantity * unit)}</span></div>` +
+        modifiers.map((modifier) => `<div class="modifier">• ${escapeHtml(modifier)}</div>`).join("")
+      ).join("");
+      const paymentHtml = fixture.payments.map(([method, amount]) => `<div class="row"><span>${escapeHtml(method)}</span><span>${money(amount)}</span></div>`).join("");
+      const wrapper = document.createElement("section");
+      wrapper.innerHTML = `<div class="fixture-title">${escapeHtml(fixture.title)}</div><article class="receipt" id="fixture-${index}">
+        ${fixture.marker ? `<div class="marker">${escapeHtml(fixture.marker)}</div>` : ""}
+        <h1>روقان</h1><p>Rawaqan Restaurant</p><div class="rule"></div>
+        <div class="row"><span>رقم الفاتورة</span><span dir="ltr">${escapeHtml(fixture.number)}</span></div>
+        <div class="row"><span>الجهاز</span><span>P01</span></div>
+        <div class="row"><span>التاريخ</span><span dir="ltr">2026-08-24 19:30</span></div>
+        ${fixture.split ? `<h2>${escapeHtml(fixture.split)}</h2>` : ""}
+        <div class="rule"></div>${lineHtml}<div class="rule"></div>
+        <div class="row"><span>المجموع الفرعي</span><span>${money(fixture.subtotal)}</span></div>
+        ${fixture.discount ? `<div class="row"><span>خصم</span><span>−${money(fixture.discount)}</span></div>` : ""}
+        <div class="row total"><span>الإجمالي</span><span>${money(total)}</span></div>
+        <div class="rule"></div>${paymentHtml}
+        ${fixture.tendered != null ? `<div class="row"><span>المستلم</span><span>${money(fixture.tendered)}</span></div><div class="row total"><span>الباقي</span><span>${money(fixture.change)}</span></div>` : ""}
+        <div class="rule"></div><p>شكراً لزيارتكم</p><p>هذه بيانات اختبار وليست فاتورة ضريبية</p>
+      </article>`;
+      host.appendChild(wrapper);
+      select.add(new Option(fixture.title, String(index)));
+    });
+    function setWidth(width) { document.documentElement.style.setProperty("--paper", width + "mm"); }
+    function printFixture() {
+      document.querySelectorAll(".receipt").forEach((node) => node.classList.remove("print-target"));
+      document.getElementById("fixture-" + select.value).classList.add("print-target");
+      window.print();
+    }
+  </script>
+</body>
+</html>

@@ -60,7 +60,7 @@ function DeferredToaster() {
 
 // Warm the critical queries in parallel with the lazy route chunk (LCP):
 // without this, the API fetch only starts after the page chunk finishes loading.
-if (!window.location.pathname.startsWith('/admin')) {
+if (!window.location.pathname.startsWith('/admin') && !window.location.pathname.startsWith('/pos')) {
   void queryClient.prefetchQuery({
     queryKey: queryKeys.settings,
     queryFn: settingsService.get,
