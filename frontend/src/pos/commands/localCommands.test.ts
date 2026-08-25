@@ -12,6 +12,7 @@ import {
   mergeLocalOrders,
   openLocalOrder,
   payLocalInvoice,
+  recordLocalPrintEvent,
 } from "./localCommands";
 import { priceLine } from "../domain/pricing";
 import { splitMinorEqual } from "../types";
@@ -41,6 +42,43 @@ beforeEach(async () => {
 });
 
 describe("local-first POS commands", () => {
+  it("records initial and reprint receipt events in the offline outbox", async () => {
+    await posDb.invoices.put({
+      id: "invoice-print",
+      invoiceNumber: "RWQ-P01-2026-000001",
+      orderId: "order-print",
+      status: "PAID",
+      businessDate: "2026-08-25",
+      subtotalMinor: "1500",
+      discountMinor: "0",
+      totalMinor: "1500",
+      refundedMinor: "0",
+      cashierId: "cashier",
+      deviceId: "11111111-1111-4111-8111-111111111111",
+      issuedAt: "2026-08-25T00:00:00.000Z",
+    });
+
+    await recordLocalPrintEvent("invoice-print", "INITIAL", "80mm");
+    await recordLocalPrintEvent("invoice-print", "REPRINT", "58mm");
+
+    const events = await posDb.receiptPrintEvents
+      .where("invoiceId")
+      .equals("invoice-print")
+      .sortBy("createdAt");
+    expect(events.map(({ type, paperWidthMm }) => ({ type, paperWidthMm }))).toEqual([
+      { type: "INITIAL", paperWidthMm: 80 },
+      { type: "REPRINT", paperWidthMm: 58 },
+    ]);
+    const operations = await posDb.syncOperations
+      .where("status")
+      .equals("PENDING")
+      .toArray();
+    expect(operations.map((operation) => operation.operationType)).toEqual([
+      "PRINT_EVENT",
+      "PRINT_EVENT",
+    ]);
+  });
+
   it("atomically opens an order and appends its outbox operation", async () => {
     const { result: orderId } = await openLocalOrder({
       tableId: "22222222-2222-4222-8222-222222222222",

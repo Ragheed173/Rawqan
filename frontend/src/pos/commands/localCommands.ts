@@ -84,6 +84,42 @@ export async function closeLocalShift(shiftId: string, actualClosingCashMinor: s
   return localOperation("CLOSE_SHIFT", payload, [posDb.shifts], async () => { await posDb.shifts.update(shiftId, { status: "CLOSED", actualClosingCashMinor, differenceMinor, closedAt: new Date().toISOString() }); return shiftId; });
 }
 
+export async function recordLocalPrintEvent(
+  invoiceId: string,
+  type: "INITIAL" | "REPRINT",
+  profile: "58mm" | "80mm",
+) {
+  const invoice = await posDb.invoices.get(invoiceId);
+  if (!invoice) throw new Error("INVOICE_NOT_FOUND");
+  const id = crypto.randomUUID();
+  const paperWidthMm = profile === "58mm" ? 58 : 80;
+  const createdAt = new Date().toISOString();
+  const payload = {
+    id,
+    invoiceId,
+    type,
+    paperWidthMm,
+    profileName: profile,
+  };
+  return localOperation(
+    "PRINT_EVENT",
+    payload,
+    [posDb.receiptPrintEvents],
+    async () => {
+      const event = {
+        id,
+        invoiceId,
+        type,
+        paperWidthMm: paperWidthMm as 58 | 80,
+        profileName: profile,
+        createdAt,
+      };
+      await posDb.receiptPrintEvents.add(event);
+      return event;
+    },
+  );
+}
+
 function overlaps(startA: string, endA: string | null | undefined, startB: string, endB: string | null | undefined) {
   const fallback = (start: string) => new Date(new Date(start).getTime() + 90 * 60_000).toISOString();
   return startA < (endB ?? fallback(startB)) && startB < (endA ?? fallback(startA));

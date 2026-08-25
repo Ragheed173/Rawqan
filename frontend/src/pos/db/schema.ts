@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
-import type { DeviceState, LocalInvoice, LocalInvoiceAllocationLine, LocalInvoiceAllocationModifier, LocalInvoiceLine, LocalInvoiceModifier, LocalOrder, LocalOrderItem, LocalOrderModifier, LocalOrderTable, LocalPayment, OfflineSession, SyncOperation } from "../types";
+import type { DeviceState, LocalInvoice, LocalInvoiceAllocationLine, LocalInvoiceAllocationModifier, LocalInvoiceLine, LocalInvoiceModifier, LocalOrder, LocalOrderItem, LocalOrderModifier, LocalOrderTable, LocalPayment, LocalReceiptPrintEvent, OfflineSession, SyncOperation } from "../types";
 
 export interface CatalogMeta { key: string; revision: string; updatedAt: string }
 export interface LocalCategory { id: string; name: string; nameEn?: string | null; isActive: boolean; sortOrder: number }
@@ -18,6 +18,7 @@ export class PosDatabase extends Dexie {
   orders!: EntityTable<LocalOrder, "id">; orderTables!: EntityTable<LocalOrderTable, "id">; orderItems!: EntityTable<LocalOrderItem, "id">; orderItemModifiers!: EntityTable<LocalOrderModifier, "id">;
   invoices!: EntityTable<LocalInvoice, "id">; invoiceLines!: EntityTable<LocalInvoiceLine, "id">; invoiceModifiers!: EntityTable<LocalInvoiceModifier, "id">; discounts!: EntityTable<GenericRecord, "id">; payments!: EntityTable<LocalPayment, "id">; refunds!: EntityTable<GenericRecord, "id">; shifts!: EntityTable<GenericRecord, "id">;
   invoiceAllocationLines!: EntityTable<LocalInvoiceAllocationLine, "id">; invoiceAllocationModifiers!: EntityTable<LocalInvoiceAllocationModifier, "id">;
+  receiptPrintEvents!: EntityTable<LocalReceiptPrintEvent, "id">;
   syncOperations!: EntityTable<SyncOperation, "operationId">; deviceState!: EntityTable<DeviceState, "key">; offlineSession!: EntityTable<OfflineSession, "id">;
 
   constructor(name = "rawaqan-pos") {
@@ -34,6 +35,9 @@ export class PosDatabase extends Dexie {
     this.version(2).stores({
       invoiceAllocationLines: "id, invoiceId, orderItemId",
       invoiceAllocationModifiers: "id, invoiceAllocationLineId",
+    });
+    this.version(3).stores({
+      receiptPrintEvents: "id, invoiceId, type, createdAt",
     });
   }
 }

@@ -12,6 +12,7 @@ import {
   finalizeLocalItemSplit,
   openLocalShift,
   payLocalInvoice,
+  recordLocalPrintEvent,
   updateLocalReservation,
 } from "../commands/localCommands";
 import {
@@ -879,6 +880,27 @@ export function InvoiceDetailPage() {
     [],
     [id],
   );
+  const printEvents = usePosLive(
+    () => posDb.receiptPrintEvents.where("invoiceId").equals(id!).toArray(),
+    [],
+    [id],
+  );
+  const tableNames = usePosLive(
+    async () => {
+      if (!invoice?.orderId) return [];
+      const assignments = await posDb.orderTables
+        .where("orderId")
+        .equals(invoice.orderId)
+        .toArray();
+      const uniqueTableIds = [...new Set(assignments.map((row) => row.tableId))];
+      const tables = await posDb.restaurantTables.bulkGet(uniqueTableIds);
+      return tables.flatMap((table) =>
+        table ? [table.displayName?.trim() || table.code] : [],
+      );
+    },
+    [],
+    [invoice?.orderId],
+  );
   if (!invoice) return <p>الفاتورة غير موجودة</p>;
   const due = (
     BigInt(invoice.totalMinor) -
@@ -910,22 +932,24 @@ export function InvoiceDetailPage() {
     setPrintBusy(true);
     setError("");
     try {
+      const printType = printEvents.length > 0 ? "REPRINT" : "INITIAL";
       await new BrowserReceiptPrinter().print(
         {
           restaurantName: state?.restaurantName ?? "روقان",
           footer: state?.receiptFooter,
           invoice,
-          tableNames: [],
+          tableNames,
           cashierName: admin?.name ?? "الكاشير",
           items,
           modifiers,
           allocationLines,
           allocationModifiers,
           payments,
-          isReprint: payments.length > 0,
+          isReprint: printType === "REPRINT",
         },
         profile,
       );
+      await recordLocalPrintEvent(invoice.id, printType, profile);
     } catch {
       setError(
         "تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة، تحقق من الطابعة، ثم أعد المحاولة.",
@@ -1036,7 +1060,11 @@ export function InvoiceDetailPage() {
         onClick={() => void print()}
         className="mt-5 min-h-12 w-full rounded-xl bg-slate-950 text-white"
       >
-        {printBusy ? "جارٍ تجهيز الإيصال…" : "طباعة / إعادة طباعة"}
+        {printBusy
+          ? "جارٍ تجهيز الإيصال…"
+          : printEvents.length > 0
+            ? "إعادة طباعة الإيصال"
+            : "طباعة الإيصال"}
       </button>
     </section>
   );
