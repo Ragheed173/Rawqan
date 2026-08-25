@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuthStore } from "@/store/auth";
 import { posDb } from "../db/schema";
@@ -8,6 +8,11 @@ import { checkoutLocal } from "../commands/localCommands";
 import { currentBusinessDate } from "../domain/businessDate";
 import { formatMinor } from "../format";
 import { posErrorMessage } from "../errors";
+import {
+  minorToShekelInput,
+  normalizeShekelInput,
+  shekelInputToMinor,
+} from "../moneyInput";
 
 export default function CheckoutPage() {
   const { orderId } = useParams();
@@ -29,12 +34,17 @@ export default function CheckoutPage() {
     [orderId],
   );
   const total = addMinor(...items.map((item) => item.lineTotalMinor));
-  const [tendered, setTendered] = useState(total);
+  const [tendered, setTendered] = useState("");
   const [busy, setBusy] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [error, setError] = useState("");
   const cashAmount = BigInt(total);
-  const change = BigInt(tendered || "0") - cashAmount;
+  const tenderedMinor = shekelInputToMinor(tendered);
+  const change = BigInt(tenderedMinor) - cashAmount;
+
+  useEffect(() => {
+    setTendered((current) => current || minorToShekelInput(total));
+  }, [total]);
 
   const submit = async () => {
     const userId = admin?.id ?? offline?.userId;
@@ -50,7 +60,7 @@ export default function CheckoutPage() {
           {
             method: "CASH",
             amountMinor: cashAmount.toString(),
-            tenderedMinor: tendered || cashAmount.toString(),
+            tenderedMinor: tenderedMinor || cashAmount.toString(),
           },
         ],
       });
@@ -86,13 +96,11 @@ export default function CheckoutPage() {
         طريقة الدفع: نقدي
       </div>
       <label className="mt-5 block">
-        المبلغ النقدي المستلم (بالأغورة)
+        المبلغ النقدي المستلم (بالشيكل)
         <input
           aria-label="المبلغ النقدي المستلم"
           value={tendered}
-          onChange={(event) =>
-            setTendered(event.target.value.replace(/\D/g, ""))
-          }
+          onChange={(event) => setTendered(normalizeShekelInput(event.target.value))}
           className="mt-2 min-h-14 w-full rounded-xl border px-4 text-2xl"
         />
         <span

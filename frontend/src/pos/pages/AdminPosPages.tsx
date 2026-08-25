@@ -17,6 +17,7 @@ import {
 import { verifyAndStoreCapability } from "../auth/offline";
 import { formatMinor } from "../format";
 import { posErrorMessage } from "../errors";
+import { minorToShekelInput, shekelInputToMinor } from "../moneyInput";
 
 function useRemote<T>(url: string, initial: T) {
   const [value, setValue] = useState(initial);
@@ -854,13 +855,14 @@ export function AdminInvoiceDetailPage() {
   };
   const refundInvoice = async () => {
     if (!invoice || remainingRefund <= 0n || busy) return;
-    const amountMinor = prompt(
-      `المبلغ المرتجع بالأغورة (الحد الأقصى ${remainingRefund})`,
-      remainingRefund.toString(),
+    const amountShekel = prompt(
+      `المبلغ المرتجع بالشيكل (الحد الأقصى ${minorToShekelInput(remainingRefund)})`,
+      minorToShekelInput(remainingRefund),
     );
-    if (!amountMinor) return;
+    if (!amountShekel) return;
+    const amountMinor = shekelInputToMinor(amountShekel);
     const reason = prompt("سبب المرتجع (إلزامي)");
-    if (!reason || !/^\d+$/.test(amountMinor)) return;
+    if (!reason || BigInt(amountMinor) <= 0n) return;
     if (
       !confirm(
         `تأكيد مرتجع ${formatMinor(amountMinor)} من ${invoice.invoiceNumber}؟`,

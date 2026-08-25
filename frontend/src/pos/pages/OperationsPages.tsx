@@ -22,6 +22,11 @@ import {
 } from "../domain/businessDate";
 import { formatMinor } from "../format";
 import { posErrorMessage } from "../errors";
+import {
+  minorToShekelInput,
+  normalizeShekelInput,
+  shekelInputToMinor,
+} from "../moneyInput";
 
 export function SplitPage() {
   const { orderId } = useParams();
@@ -666,8 +671,13 @@ export function ShiftsPage() {
     try {
       if (shift) {
         if (!confirm("إغلاق الوردية نهائياً بالمبلغ الفعلي المدخل؟")) return;
-        await closeLocalShift(String(shift.id), amount);
-      } else await openLocalShift(userId, amount, currentBusinessDate(state));
+        await closeLocalShift(String(shift.id), shekelInputToMinor(amount));
+      } else
+        await openLocalShift(
+          userId,
+          shekelInputToMinor(amount),
+          currentBusinessDate(state),
+        );
       setAmount("0");
     } catch (cause) {
       setError(
@@ -702,7 +712,8 @@ export function ShiftsPage() {
         {shift ? "النقد الفعلي عند الإغلاق" : "النقد الافتتاحي"}
         <input
           value={amount}
-          onChange={(event) => setAmount(event.target.value.replace(/\D/g, ""))}
+          inputMode="decimal"
+          onChange={(event) => setAmount(normalizeShekelInput(event.target.value))}
           className="mt-2 min-h-12 w-full rounded-xl border px-4"
         />
       </label>
@@ -917,7 +928,7 @@ export function InvoiceDetailPage() {
         userId,
         method: "CASH",
         amountMinor: due,
-        tenderedMinor: tendered || due,
+        tenderedMinor: tendered ? shekelInputToMinor(tendered) : due,
       });
     } catch (cause) {
       setError(
@@ -1019,10 +1030,11 @@ export function InvoiceDetailPage() {
           </div>
           <input
             value={tendered}
+            inputMode="decimal"
             onChange={(event) =>
-              setTendered(event.target.value.replace(/\D/g, ""))
+              setTendered(normalizeShekelInput(event.target.value))
             }
-            placeholder={`المستلم بالأغورة (المطلوب ${due})`}
+            placeholder={`المستلم بالشيكل (المطلوب ${minorToShekelInput(due)})`}
             className="mt-3 min-h-12 w-full rounded-xl border px-3"
           />
           <button
