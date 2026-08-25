@@ -293,6 +293,19 @@ export function requestBill(orderId: string, expectedVersion: number, context: P
   }, existingTx);
 }
 
+export function reopenOrder(orderId: string, expectedVersion: number, context: PosActorContext, existingTx?: PosTx) {
+  return inTransaction(async (tx) => {
+    const { actor } = await loadContext(tx, context);
+    const order = await assertOrderVersion(tx, orderId, expectedVersion);
+    assertOrderTransition(order.status, "OPEN");
+    const updated = await tx.order.update({ where: { id: orderId }, data: { status: "OPEN", version: { increment: 1 } } });
+    const assignments = await tx.orderTableAssignment.findMany({ where: { orderId, releasedAt: null }, select: { tableId: true } });
+    await tx.diningTable.updateMany({ where: { id: { in: assignments.map(({ tableId }) => tableId) } }, data: { status: "OCCUPIED" } });
+    await writeActivity({ ...actorAudit(actor), action: "ORDER_UPDATED", entityType: "Order", entityId: orderId, deviceId: context.deviceId, operationId: context.operationId, beforeData: { status: order.status }, afterData: { status: updated.status } }, tx);
+    return updated;
+  }, existingTx);
+}
+
 export function transferOrder(orderId: string, input: { expectedVersion: number; destinationTableId: string }, context: PosActorContext, existingTx?: PosTx) {
   return inTransaction(async (tx) => {
     const { actor } = await loadContext(tx, context);

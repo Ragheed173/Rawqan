@@ -8,6 +8,12 @@ import {
   type LocalTable,
 } from "../db/schema";
 import type { SyncOperation } from "../types";
+import type {
+  LocalOrder,
+  LocalOrderItem,
+  LocalOrderModifier,
+  LocalOrderTable,
+} from "../types";
 import { config } from "@/config/env";
 import { posErrorCode, posErrorMessage } from "../errors";
 
@@ -223,13 +229,30 @@ interface WireCatalog {
     sortOrder: number;
   }[];
 }
+
+interface WireOrderItem extends LocalOrderItem {
+  modifiers?: LocalOrderModifier[];
+}
+
+interface WireOrder extends LocalOrder {
+  items?: WireOrderItem[];
+}
+
+interface WireOrderAssignment extends LocalOrderTable {
+  order?: WireOrder;
+}
+
+interface WireTable extends LocalTable {
+  orderAssignments?: WireOrderAssignment[];
+}
+
 interface PullResponse {
   cursor: string;
   changes: unknown[];
   configuration: {
     settings?: { name?: string; timezone?: string; businessDayCutoff?: string };
     catalog: WireCatalog;
-    tables?: (LocalTable & { orderAssignments?: { orderId: string }[] })[];
+    tables?: WireTable[];
     reservations?: {
       id: string;
       customerName: string;
@@ -305,6 +328,10 @@ async function applyPulledOperations(
     "rw",
     [
       posDb.restaurantTables,
+      posDb.orders,
+      posDb.orderTables,
+      posDb.orderItems,
+      posDb.orderItemModifiers,
       posDb.reservations,
       posDb.shifts,
       posDb.syncOperations,
@@ -318,6 +345,7 @@ async function applyPulledOperations(
             currentOrderId: table.orderAssignments?.[0]?.orderId ?? null,
           })),
         );
+        await reconcileActiveOrders(configuration.tables);
       }
       if (configuration.reservations) {
         await posDb.reservations.clear();
@@ -331,6 +359,65 @@ async function applyPulledOperations(
       await reconcileCurrentShift(configuration.currentShift);
     },
   );
+}
+
+async function reconcileActiveOrders(tables: WireTable[]) {
+  const assignments = tables.flatMap(
+    (table) => table.orderAssignments ?? [],
+  );
+  const snapshots = assignments.filter(
+    (assignment): assignment is WireOrderAssignment & { order: WireOrder } =>
+      Boolean(assignment.order),
+  );
+  if (!snapshots.length) return;
+
+  const unfinished = await posDb.syncOperations
+    .where("status")
+    .anyOf("PENDING", "SYNCING", "FAILED", "CONFLICT")
+    .toArray();
+
+  for (const assignment of snapshots) {
+    const order = assignment.order;
+    const hasLocalChanges = unfinished.some(
+      (operation) =>
+        operation.payload.id === order.id ||
+        operation.payload.orderId === order.id ||
+        (Array.isArray(operation.payload.sourceOrderIds) &&
+          operation.payload.sourceOrderIds.includes(order.id)),
+    );
+    if (hasLocalChanges) continue;
+
+    const existingItems = await posDb.orderItems
+      .where("orderId")
+      .equals(order.id)
+      .toArray();
+    const existingItemIds = existingItems.map((item) => item.id);
+    if (existingItemIds.length) {
+      await posDb.orderItemModifiers
+        .where("orderItemId")
+        .anyOf(existingItemIds)
+        .delete();
+    }
+    await posDb.orderItems.where("orderId").equals(order.id).delete();
+
+    const { items = [], ...localOrder } = order;
+    await posDb.orders.put(localOrder);
+    await posDb.orderTables.put({
+      id: assignment.id,
+      orderId: assignment.orderId,
+      tableId: assignment.tableId,
+      assignedAt: assignment.assignedAt,
+      releasedAt: assignment.releasedAt,
+      isPrimary: assignment.isPrimary,
+    });
+    if (items.length) {
+      await posDb.orderItems.bulkPut(
+        items.map(({ modifiers: _modifiers, ...item }) => item),
+      );
+      const modifiers = items.flatMap((item) => item.modifiers ?? []);
+      if (modifiers.length) await posDb.orderItemModifiers.bulkPut(modifiers);
+    }
+  }
 }
 
 export async function reconcileCurrentShift(
@@ -459,7 +546,7 @@ export async function applyBootstrap(data: {
       sortOrder: number;
     }[];
   };
-  tables: LocalTable[];
+  tables: WireTable[];
 }) {
   await posDb.transaction(
     "rw",
@@ -471,6 +558,10 @@ export async function applyBootstrap(data: {
       posDb.modifierOptions,
       posDb.menuItemModifierGroups,
       posDb.restaurantTables,
+      posDb.orders,
+      posDb.orderTables,
+      posDb.orderItems,
+      posDb.orderItemModifiers,
       posDb.reservations,
       posDb.shifts,
       posDb.syncOperations,
@@ -520,6 +611,7 @@ export async function applyBootstrap(data: {
               .orderAssignments?.[0]?.orderId ?? table.currentOrderId,
         })),
       );
+      await reconcileActiveOrders(data.tables);
       if (data.reservations?.length)
         await posDb.reservations.bulkPut(
           data.reservations.map((reservation) => ({

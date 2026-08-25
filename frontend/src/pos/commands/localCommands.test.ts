@@ -13,6 +13,7 @@ import {
   openLocalOrder,
   payLocalInvoice,
   recordLocalPrintEvent,
+  reopenLocalOrder,
 } from "./localCommands";
 import { priceLine } from "../domain/pricing";
 import { splitMinorEqual } from "../types";
@@ -42,6 +43,45 @@ beforeEach(async () => {
 });
 
 describe("local-first POS commands", () => {
+  it("reopens a bill-requested order and restores its table for editing", async () => {
+    await posDb.orders.put({
+      id: "order-reopen",
+      status: "BILL_REQUESTED",
+      version: 2,
+      businessDate: "2026-08-25",
+      deviceId: "11111111-1111-4111-8111-111111111111",
+      openedById: "cashier",
+      openedAt: "2026-08-25T00:00:00.000Z",
+    });
+    await posDb.orderTables.put({
+      id: "assignment-reopen",
+      orderId: "order-reopen",
+      tableId: "22222222-2222-4222-8222-222222222222",
+      assignedAt: "2026-08-25T00:00:00.000Z",
+      isPrimary: true,
+    });
+    await posDb.restaurantTables.update(
+      "22222222-2222-4222-8222-222222222222",
+      { status: "BILL_REQUESTED", currentOrderId: "order-reopen" },
+    );
+
+    await reopenLocalOrder("order-reopen");
+
+    expect(await posDb.orders.get("order-reopen")).toMatchObject({
+      status: "OPEN",
+      version: 3,
+    });
+    expect(
+      await posDb.restaurantTables.get(
+        "22222222-2222-4222-8222-222222222222",
+      ),
+    ).toMatchObject({ status: "OCCUPIED" });
+    expect((await posDb.syncOperations.toArray()).at(-1)).toMatchObject({
+      operationType: "REOPEN_ORDER",
+      payload: { id: "order-reopen", expectedVersion: 2 },
+    });
+  });
+
   it("records initial and reprint receipt events in the offline outbox", async () => {
     await posDb.invoices.put({
       id: "invoice-print",

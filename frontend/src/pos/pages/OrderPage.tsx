@@ -7,6 +7,7 @@ import {
   mergeLocalOrders,
   removeLocalOrderItem,
   requestLocalBill,
+  reopenLocalOrder,
   transferLocalOrder,
   updateLocalOrderItem,
 } from "../commands/localCommands";
@@ -476,6 +477,17 @@ export default function OrderPage() {
           <span>الإجمالي</span>
           <span>{formatMinor(total)}</span>
         </div>
+        {order?.status === "BILL_REQUESTED" && (
+          <button
+            disabled={Boolean(busyAction)}
+            onClick={() =>
+              void runItemAction("reopen", () => reopenLocalOrder(order.id))
+            }
+            className="mt-4 min-h-12 w-full rounded-xl bg-slate-950 font-bold text-white disabled:opacity-40"
+          >
+            استئناف الطلب وإضافة أصناف
+          </button>
+        )}
         <div className="mt-5 grid grid-cols-2 gap-2">
           <button
             disabled={

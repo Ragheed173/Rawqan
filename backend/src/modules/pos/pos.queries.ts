@@ -41,7 +41,11 @@ export async function bootstrap(actorId: string, deviceId: string) {
       include: {
         orderAssignments: {
           where: { releasedAt: null },
-          include: { order: { include: { items: true } } },
+          include: {
+            order: {
+              include: { items: { include: { modifiers: true } } },
+            },
+          },
         },
       },
     }),

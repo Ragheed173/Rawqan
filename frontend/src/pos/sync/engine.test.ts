@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { posDb } from "../db/schema";
 import {
   orderDueOperations,
+  applyBootstrap,
   reconcileCurrentShift,
   reconcileLocalSequence,
   recoverInterruptedOperations,
@@ -11,6 +12,82 @@ import {
 beforeEach(async () => { posDb.close(); await posDb.delete(); await posDb.open(); });
 
 describe("POS sync recovery", () => {
+  it("restores an active server order and its items after a page reload", async () => {
+    await posDb.deviceState.put({
+      key: "primary",
+      deviceId: "device",
+      deviceCode: "P01",
+      nextLocalSequence: "1",
+      invoiceYear: 2026,
+      nextInvoiceSequence: 1,
+      catalogRevision: "0",
+    });
+
+    await applyBootstrap({
+      device: { id: "device", code: "P01" },
+      nextLocalSequence: "1",
+      catalog: {
+        revision: "1",
+        categories: [],
+        menuItems: [],
+        modifierGroups: [],
+        menuItemModifierGroups: [],
+      },
+      tables: [
+        {
+          id: "table",
+          code: "T01",
+          status: "BILL_REQUESTED",
+          isActive: true,
+          sortOrder: 1,
+          orderAssignments: [
+            {
+              id: "assignment",
+              orderId: "order",
+              tableId: "table",
+              assignedAt: "2026-08-25T00:00:00.000Z",
+              isPrimary: true,
+              order: {
+                id: "order",
+                status: "BILL_REQUESTED",
+                version: 2,
+                businessDate: "2026-08-25T00:00:00.000Z",
+                deviceId: "device",
+                openedById: "cashier",
+                openedAt: "2026-08-25T00:00:00.000Z",
+                items: [
+                  {
+                    id: "item",
+                    orderId: "order",
+                    menuItemId: "latte",
+                    itemNameSnapshot: "لاتيه روقان",
+                    unitPriceMinor: "1500",
+                    quantity: 1,
+                    lineTotalMinor: "1500",
+                    sortOrder: 0,
+                    modifiers: [],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(await posDb.restaurantTables.get("table")).toMatchObject({
+      currentOrderId: "order",
+    });
+    expect(await posDb.orders.get("order")).toMatchObject({
+      status: "BILL_REQUESTED",
+      version: 2,
+    });
+    expect(await posDb.orderItems.get("item")).toMatchObject({
+      itemNameSnapshot: "لاتيه روقان",
+      lineTotalMinor: "1500",
+    });
+  });
+
   it("rebases unfinished operations after browser storage is reset", async () => {
     await posDb.deviceState.put({
       key: "primary",

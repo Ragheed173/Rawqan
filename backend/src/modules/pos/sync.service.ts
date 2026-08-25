@@ -48,6 +48,7 @@ async function dispatch(operation: PushOperation, actorId: string, deviceId: str
     case "UPDATE_ORDER_ITEM": return commands.updateOrderItem(schemas.uuid.parse(payload.orderId), schemas.uuid.parse(payload.itemId), schemas.updateItemBody.parse(payload), context, tx);
     case "REMOVE_ORDER_ITEM": return commands.removeOrderItem(schemas.uuid.parse(payload.orderId), schemas.uuid.parse(payload.itemId), schemas.versionBody.parse(payload).expectedVersion, context, tx);
     case "REQUEST_BILL": return commands.requestBill(parseId(payload), schemas.versionBody.parse(payload).expectedVersion, context, tx);
+    case "REOPEN_ORDER": return commands.reopenOrder(parseId(payload), schemas.versionBody.parse(payload).expectedVersion, context, tx);
     case "TRANSFER_ORDER": return commands.transferOrder(parseId(payload), schemas.transferBody.parse(payload), context, tx);
     case "MERGE_ORDERS": return commands.mergeOrders(parseId(payload), schemas.mergeBody.parse(payload), context, tx);
     case "APPLY_DISCOUNT": return commands.applyOrderDiscount(parseId(payload), schemas.discountBody.parse(payload), context, tx);
@@ -121,7 +122,19 @@ export async function pullChanges(actorId: string, deviceId: string, cursor: big
   const nextCursor = changes.at(-1)?.revision ?? cursor;
   const [settings, tables, reservations, currentShift, categories, menuItems, modifierGroups, modifierLinks] = await Promise.all([
     prisma.restaurantSettings.findFirst({ select: { name: true, posCurrency: true, timezone: true, businessDayCutoff: true, updatedAt: true } }),
-    prisma.diningTable.findMany({ orderBy: [{ sortOrder: "asc" }, { code: "asc" }], include: { orderAssignments: { where: { releasedAt: null }, select: { orderId: true } } } }),
+    prisma.diningTable.findMany({
+      orderBy: [{ sortOrder: "asc" }, { code: "asc" }],
+      include: {
+        orderAssignments: {
+          where: { releasedAt: null },
+          include: {
+            order: {
+              include: { items: { include: { modifiers: true } } },
+            },
+          },
+        },
+      },
+    }),
     prisma.reservation.findMany({ where: { startsAt: { gte: new Date(Date.now() - 4 * 60 * 60 * 1000) }, status: { in: ["PENDING", "CONFIRMED", "SEATED"] } }, include: { tables: true }, orderBy: { startsAt: "asc" }, take: 200 }),
     prisma.cashierShift.findFirst({ where: { userId: actorId, deviceId, status: "OPEN" } }),
     prisma.category.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),

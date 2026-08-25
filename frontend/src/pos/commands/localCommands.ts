@@ -52,6 +52,18 @@ export async function requestLocalBill(orderId: string) {
   });
 }
 
+export async function reopenLocalOrder(orderId: string) {
+  const order = await posDb.orders.get(orderId); if (!order) throw new Error("ORDER_NOT_FOUND");
+  const payload = { id: orderId, expectedVersion: order.version };
+  return localOperation("REOPEN_ORDER", payload, [posDb.orders, posDb.orderTables, posDb.restaurantTables], async () => {
+    const current = await posDb.orders.get(orderId); if (!current || current.status !== "BILL_REQUESTED") throw new Error("INVALID_ORDER_STATE");
+    await posDb.orders.update(orderId, { status: "OPEN", version: current.version + 1 });
+    const assignments = await posDb.orderTables.where("orderId").equals(orderId).filter((row) => !row.releasedAt).toArray();
+    await Promise.all(assignments.map((row) => posDb.restaurantTables.update(row.tableId, { status: "OCCUPIED" })));
+    return orderId;
+  });
+}
+
 export async function updateLocalOrderItem(orderId: string, itemId: string, quantity: number, notes?: string | null) {
   const order = await posDb.orders.get(orderId); const item = await posDb.orderItems.get(itemId); if (!order || !item) throw new Error("ORDER_NOT_FOUND");
   const payload = { orderId, itemId, expectedVersion: order.version, quantity, notes };
