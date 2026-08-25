@@ -121,7 +121,7 @@ export async function pullChanges(actorId: string, deviceId: string, cursor: big
   const changes = await prisma.catalogChange.findMany({ where: { revision: { gt: cursor } }, orderBy: { revision: "asc" }, take: limit });
   const nextCursor = changes.at(-1)?.revision ?? cursor;
   const [settings, tables, reservations, currentShift, categories, menuItems, modifierGroups, modifierLinks] = await Promise.all([
-    prisma.restaurantSettings.findFirst({ select: { name: true, posCurrency: true, timezone: true, businessDayCutoff: true, updatedAt: true } }),
+    prisma.restaurantSettings.findFirst({ select: { name: true, posCurrency: true, timezone: true, businessDayCutoff: true, posCacheEpoch: true, updatedAt: true } }),
     prisma.diningTable.findMany({
       orderBy: [{ sortOrder: "asc" }, { code: "asc" }],
       include: {

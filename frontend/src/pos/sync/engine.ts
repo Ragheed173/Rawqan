@@ -250,7 +250,12 @@ interface PullResponse {
   cursor: string;
   changes: unknown[];
   configuration: {
-    settings?: { name?: string; timezone?: string; businessDayCutoff?: string };
+    settings?: {
+      name?: string;
+      timezone?: string;
+      businessDayCutoff?: string;
+      posCacheEpoch?: number;
+    };
     catalog: WireCatalog;
     tables?: WireTable[];
     reservations?: {
@@ -324,6 +329,7 @@ async function applyPulledCatalog(catalog: WireCatalog) {
 async function applyPulledOperations(
   configuration: PullResponse["configuration"],
 ) {
+  await applyServerPosCacheEpoch(configuration.settings?.posCacheEpoch);
   await posDb.transaction(
     "rw",
     [
@@ -359,6 +365,71 @@ async function applyPulledOperations(
       await reconcileCurrentShift(configuration.currentShift);
     },
   );
+}
+
+/**
+ * Applies an explicit server-side transactional reset once per browser.
+ * Unfinished offline work always wins: the reset is deferred and the epoch is
+ * left unchanged so a later successful sync can safely retry it.
+ */
+export async function applyServerPosCacheEpoch(serverEpoch?: number) {
+  if (!Number.isSafeInteger(serverEpoch) || serverEpoch! < 0) return false;
+  const current = await posDb.deviceState.get("primary");
+  if (!current) return true;
+  if ((current.posCacheEpoch ?? 0) >= serverEpoch!) return true;
+
+  const unfinished = await posDb.syncOperations
+    .where("status")
+    .anyOf("PENDING", "SYNCING", "FAILED", "CONFLICT")
+    .count();
+  if (unfinished > 0) return false;
+
+  await posDb.transaction(
+    "rw",
+    [
+      posDb.orders,
+      posDb.orderTables,
+      posDb.orderItems,
+      posDb.orderItemModifiers,
+      posDb.invoices,
+      posDb.invoiceLines,
+      posDb.invoiceModifiers,
+      posDb.invoiceAllocationLines,
+      posDb.invoiceAllocationModifiers,
+      posDb.discounts,
+      posDb.payments,
+      posDb.refunds,
+      posDb.receiptPrintEvents,
+      posDb.reservations,
+      posDb.shifts,
+      posDb.syncOperations,
+      posDb.deviceState,
+    ],
+    async () => {
+      await Promise.all([
+        posDb.orders.clear(),
+        posDb.orderTables.clear(),
+        posDb.orderItems.clear(),
+        posDb.orderItemModifiers.clear(),
+        posDb.invoices.clear(),
+        posDb.invoiceLines.clear(),
+        posDb.invoiceModifiers.clear(),
+        posDb.invoiceAllocationLines.clear(),
+        posDb.invoiceAllocationModifiers.clear(),
+        posDb.discounts.clear(),
+        posDb.payments.clear(),
+        posDb.refunds.clear(),
+        posDb.receiptPrintEvents.clear(),
+        posDb.reservations.clear(),
+        posDb.shifts.clear(),
+        posDb.syncOperations.clear(),
+      ]);
+      await posDb.deviceState.update("primary", {
+        posCacheEpoch: serverEpoch,
+      });
+    },
+  );
+  return true;
 }
 
 async function reconcileActiveOrders(tables: WireTable[]) {
@@ -514,6 +585,7 @@ export async function applyBootstrap(data: {
     footerText?: string | null;
     timezone?: string;
     businessDayCutoff?: string;
+    posCacheEpoch?: number;
   };
   currentShift?: ({ id: string } & Record<string, unknown>) | null;
   reservations?: {
@@ -548,6 +620,9 @@ export async function applyBootstrap(data: {
   };
   tables: WireTable[];
 }) {
+  const cacheResetApplied = await applyServerPosCacheEpoch(
+    data.settings?.posCacheEpoch,
+  );
   await posDb.transaction(
     "rw",
     [
@@ -649,6 +724,9 @@ export async function applyBootstrap(data: {
           data.settings?.businessDayCutoff ?? current?.businessDayCutoff,
         restaurantName: data.settings?.name ?? current?.restaurantName,
         receiptFooter: data.settings?.footerText ?? current?.receiptFooter,
+        posCacheEpoch: cacheResetApplied
+          ? data.settings?.posCacheEpoch ?? current?.posCacheEpoch
+          : current?.posCacheEpoch,
       });
     },
   );

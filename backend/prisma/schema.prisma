@@ -248,6 +248,7 @@ model RestaurantSettings {
   timezone           String   @default("Asia/Hebron")
   businessDayCutoff  String   @default("04:00") @map("business_day_cutoff")
   footerText         String?  @map("footer_text")
+  posCacheEpoch      Int      @default(0) @map("pos_cache_epoch")
   // Theme color overrides (fall back to design tokens when null)
   colorPrimary       String?  @map("color_primary")
   colorAccent        String?  @map("color_accent")

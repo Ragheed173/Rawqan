@@ -7,11 +7,104 @@ import {
   reconcileCurrentShift,
   reconcileLocalSequence,
   recoverInterruptedOperations,
+  applyServerPosCacheEpoch,
 } from "./engine";
 
 beforeEach(async () => { posDb.close(); await posDb.delete(); await posDb.open(); });
 
 describe("POS sync recovery", () => {
+  it("clears synchronized transaction cache when the server reset epoch advances", async () => {
+    await posDb.deviceState.put({
+      key: "primary",
+      deviceId: "device",
+      deviceCode: "P01",
+      nextLocalSequence: "2",
+      invoiceYear: 2026,
+      nextInvoiceSequence: 2,
+      catalogRevision: "1",
+      posCacheEpoch: 0,
+    });
+    await posDb.invoices.put({
+      id: "old-invoice",
+      invoiceNumber: "RWQ-P01-2026-000001",
+      orderId: "old-order",
+      status: "PAID",
+      businessDate: "2026-08-25",
+      subtotalMinor: "1500",
+      discountMinor: "0",
+      totalMinor: "1500",
+      refundedMinor: "0",
+      cashierId: "cashier",
+      deviceId: "device",
+      issuedAt: "2026-08-25T00:00:00.000Z",
+    });
+    await posDb.syncOperations.put({
+      operationId: "done",
+      deviceId: "device",
+      localSequence: "1",
+      requestHash: "hash",
+      operationType: "FINALIZE_INVOICE",
+      payload: { invoiceId: "old-invoice" },
+      dependencies: [],
+      status: "SUCCEEDED",
+      attempts: 1,
+      createdAt: "2026-08-25T00:00:00.000Z",
+    });
+
+    expect(await applyServerPosCacheEpoch(1)).toBe(true);
+    expect(await posDb.invoices.count()).toBe(0);
+    expect(await posDb.syncOperations.count()).toBe(0);
+    expect(await posDb.deviceState.get("primary")).toMatchObject({
+      posCacheEpoch: 1,
+    });
+  });
+
+  it("defers a server reset while offline work is unfinished", async () => {
+    await posDb.deviceState.put({
+      key: "primary",
+      deviceId: "device",
+      deviceCode: "P01",
+      nextLocalSequence: "2",
+      invoiceYear: 2026,
+      nextInvoiceSequence: 2,
+      catalogRevision: "1",
+      posCacheEpoch: 0,
+    });
+    await posDb.invoices.put({
+      id: "offline-invoice",
+      invoiceNumber: "RWQ-P01-2026-000002",
+      orderId: "offline-order",
+      status: "PAID",
+      businessDate: "2026-08-25",
+      subtotalMinor: "1500",
+      discountMinor: "0",
+      totalMinor: "1500",
+      refundedMinor: "0",
+      cashierId: "cashier",
+      deviceId: "device",
+      issuedAt: "2026-08-25T00:00:00.000Z",
+    });
+    await posDb.syncOperations.put({
+      operationId: "pending",
+      deviceId: "device",
+      localSequence: "1",
+      requestHash: "hash",
+      operationType: "FINALIZE_INVOICE",
+      payload: { invoiceId: "offline-invoice" },
+      dependencies: [],
+      status: "PENDING",
+      attempts: 0,
+      createdAt: "2026-08-25T00:00:00.000Z",
+    });
+
+    expect(await applyServerPosCacheEpoch(1)).toBe(false);
+    expect(await posDb.invoices.get("offline-invoice")).toBeDefined();
+    expect(await posDb.syncOperations.get("pending")).toBeDefined();
+    expect(await posDb.deviceState.get("primary")).toMatchObject({
+      posCacheEpoch: 0,
+    });
+  });
+
   it("restores an active server order and its items after a page reload", async () => {
     await posDb.deviceState.put({
       key: "primary",

@@ -30,6 +30,7 @@ export async function bootstrap(actorId: string, deviceId: string) {
         posCurrency: true,
         timezone: true,
         businessDayCutoff: true,
+        posCacheEpoch: true,
         updatedAt: true,
       },
     }),
