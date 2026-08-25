@@ -4,12 +4,73 @@ import { posDb } from "../db/schema";
 import {
   orderDueOperations,
   reconcileCurrentShift,
+  reconcileLocalSequence,
   recoverInterruptedOperations,
 } from "./engine";
 
 beforeEach(async () => { posDb.close(); await posDb.delete(); await posDb.open(); });
 
 describe("POS sync recovery", () => {
+  it("rebases unfinished operations after browser storage is reset", async () => {
+    await posDb.deviceState.put({
+      key: "primary",
+      deviceId: "device",
+      deviceCode: "P01",
+      nextLocalSequence: "3",
+      invoiceYear: 2026,
+      nextInvoiceSequence: 1,
+      catalogRevision: "0",
+    });
+    await posDb.syncOperations.bulkPut([
+      {
+        operationId: "open-shift",
+        deviceId: "device",
+        localSequence: "1",
+        requestHash: "hash-1",
+        operationType: "OPEN_SHIFT",
+        payload: { id: "shift" },
+        dependencies: [],
+        status: "FAILED",
+        attempts: 5,
+        errorCode: "CONFLICT",
+        createdAt: new Date().toISOString(),
+      },
+      {
+        operationId: "close-shift",
+        deviceId: "device",
+        localSequence: "2",
+        requestHash: "hash-2",
+        operationType: "CLOSE_SHIFT",
+        payload: { id: "shift" },
+        dependencies: [],
+        status: "FAILED",
+        attempts: 1,
+        errorCode: "CONFLICT",
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+    expect(await reconcileLocalSequence("device", "5")).toBe("7");
+    expect(await posDb.deviceState.get("primary")).toMatchObject({
+      nextLocalSequence: "3",
+    });
+    expect(
+      (await posDb.syncOperations.toArray())
+        .sort((a, b) =>
+          BigInt(a.localSequence) < BigInt(b.localSequence) ? -1 : 1,
+        )
+        .map((operation) => ({
+          id: operation.operationId,
+          sequence: operation.localSequence,
+          status: operation.status,
+          code: operation.errorCode,
+        })),
+    ).toEqual([
+      { id: "open-shift", sequence: "5", status: "PENDING", code: undefined },
+      { id: "close-shift", sequence: "6", status: "PENDING", code: undefined },
+    ]);
+  });
+
   it("requeues an operation left SYNCING by a browser restart", async () => {
     await posDb.syncOperations.put({ operationId: "op", deviceId: "device", localSequence: "1", requestHash: "hash", operationType: "OPEN_ORDER", payload: {}, dependencies: [], status: "SYNCING", attempts: 1, createdAt: new Date().toISOString() });
     await recoverInterruptedOperations();

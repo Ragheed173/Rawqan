@@ -372,8 +372,56 @@ export async function reconcileCurrentShift(
   if (staleIds.length) await posDb.shifts.bulkDelete(staleIds);
 }
 
+export async function reconcileLocalSequence(
+  deviceId: string,
+  serverNextLocalSequence: string,
+) {
+  const current = await posDb.deviceState.get("primary");
+  const remoteNext = BigInt(serverNextLocalSequence);
+  const localNext = BigInt(current?.nextLocalSequence ?? "1");
+  const unfinished = (
+    await posDb.syncOperations
+      .where("status")
+      .anyOf("PENDING", "SYNCING", "FAILED")
+      .filter((operation) => operation.deviceId === deviceId)
+      .toArray()
+  ).sort((a, b) =>
+    BigInt(a.localSequence) < BigInt(b.localSequence) ? -1 : 1,
+  );
+  const highestUnfinished = unfinished.reduce(
+    (highest, operation) => {
+      const sequence = BigInt(operation.localSequence);
+      return sequence > highest ? sequence : highest;
+    },
+    0n,
+  );
+  const needsRebase = unfinished.some(
+    (operation) => BigInt(operation.localSequence) < remoteNext,
+  );
+  let next = [remoteNext, localNext, highestUnfinished + 1n].reduce(
+    (highest, value) => (value > highest ? value : highest),
+  );
+
+  if (needsRebase) {
+    const retryAt = new Date().toISOString();
+    for (const operation of unfinished) {
+      await posDb.syncOperations.update(operation.operationId, {
+        localSequence: next.toString(),
+        status: "PENDING",
+        nextAttemptAt: retryAt,
+        errorCode: undefined,
+        errorMessage: undefined,
+      });
+      next += 1n;
+    }
+  }
+
+  return next.toString();
+}
+
 export async function applyBootstrap(data: {
   device: { id: string; code: string };
+  nextLocalSequence?: string;
   settings?: {
     name?: string;
     footerText?: string | null;
@@ -492,11 +540,14 @@ export async function applyBootstrap(data: {
         );
       await reconcileCurrentShift(data.currentShift);
       const current = await posDb.deviceState.get("primary");
+      const nextLocalSequence = data.nextLocalSequence
+        ? await reconcileLocalSequence(data.device.id, data.nextLocalSequence)
+        : current?.nextLocalSequence ?? "1";
       await posDb.deviceState.put({
         key: "primary",
         deviceId: data.device.id,
         deviceCode: data.device.code,
-        nextLocalSequence: current?.nextLocalSequence ?? "1",
+        nextLocalSequence,
         invoiceYear: current?.invoiceYear ?? new Date().getFullYear(),
         nextInvoiceSequence: current?.nextInvoiceSequence ?? 1,
         catalogRevision: data.catalog.revision,

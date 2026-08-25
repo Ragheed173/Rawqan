@@ -16,6 +16,7 @@ export async function bootstrap(actorId: string, deviceId: string) {
     modifierLinks,
     reservations,
     catalogRevision,
+    latestSyncOperation,
   ] = await Promise.all([
     prisma.admin.findUnique({
       where: { id: actorId },
@@ -71,6 +72,10 @@ export async function bootstrap(actorId: string, deviceId: string) {
       take: 200,
     }),
     getCurrentCatalogRevision(),
+    prisma.syncOperation.aggregate({
+      where: { deviceId },
+      _max: { localSequence: true },
+    }),
   ]);
   if (!actor?.isActive || !device?.isActive)
     throw new PosDomainError(
@@ -83,6 +88,9 @@ export async function bootstrap(actorId: string, deviceId: string) {
   });
   return {
     device,
+    nextLocalSequence: (
+      (latestSyncOperation._max.localSequence ?? 0n) + 1n
+    ).toString(),
     user: { ...actor, permissions: ROLE_PERMISSIONS[actor.role] },
     settings,
     currentShift: shift,
