@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuthStore } from "@/store/auth";
 import { posDb } from "../db/schema";
@@ -35,6 +35,7 @@ export default function CheckoutPage() {
   );
   const total = addMinor(...items.map((item) => item.lineTotalMinor));
   const [tendered, setTendered] = useState("");
+  const tenderedEdited = useRef(false);
   const [busy, setBusy] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [error, setError] = useState("");
@@ -43,7 +44,9 @@ export default function CheckoutPage() {
   const change = BigInt(tenderedMinor) - cashAmount;
 
   useEffect(() => {
-    setTendered((current) => current || minorToShekelInput(total));
+    if (!tenderedEdited.current) {
+      setTendered(minorToShekelInput(total));
+    }
   }, [total]);
 
   const submit = async () => {
@@ -100,7 +103,10 @@ export default function CheckoutPage() {
         <input
           aria-label="المبلغ النقدي المستلم"
           value={tendered}
-          onChange={(event) => setTendered(normalizeShekelInput(event.target.value))}
+          onChange={(event) => {
+            tenderedEdited.current = true;
+            setTendered(normalizeShekelInput(event.target.value));
+          }}
           className="mt-2 min-h-14 w-full rounded-xl border px-4 text-2xl"
         />
         <span
