@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  calculateReceiptDocumentHeightPx,
   calculateReceiptPageHeightMm,
   renderReceiptHtml,
   type ReceiptData,
@@ -106,12 +107,18 @@ describe("receipt renderer", () => {
       expect(html).toContain("overflow-wrap:anywhere");
       expect(html).toContain("break-inside:avoid");
       expect(html).toContain('class="paper-feed"');
-      expect(html).toContain("height:15mm");
+      expect(html).toContain("height:35mm");
+      expect(html).not.toContain(".payment{break-inside:avoid");
     },
   );
 
   it("adds a safe paper-feed buffer to the measured receipt height", () => {
-    expect(calculateReceiptPageHeightMm(0)).toBe(40);
-    expect(calculateReceiptPageHeightMm((96 / 25.4) * 100)).toBe(105);
+    expect(calculateReceiptPageHeightMm(0)).toBe(60);
+    expect(calculateReceiptPageHeightMm((96 / 25.4) * 100)).toBe(110);
+  });
+
+  it("uses the tallest rendered document measurement", () => {
+    expect(calculateReceiptDocumentHeightPx(220, 225.4, 240, 238)).toBe(240);
+    expect(calculateReceiptDocumentHeightPx(Number.NaN, -5)).toBe(0);
   });
 });
