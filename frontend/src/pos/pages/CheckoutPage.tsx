@@ -60,11 +60,11 @@ export default function CheckoutPage() {
     setBusy(true);
     setError("");
     const printer = new BrowserReceiptPrinter();
-    let printWindow: Window | undefined;
+    let printTarget: HTMLIFrameElement | undefined;
     try {
-      printWindow = printer.reservePrintWindow();
+      printTarget = printer.reservePrintFrame();
     } catch {
-      // Payment remains available even when the browser blocks the print popup.
+      // Payment remains available even when the browser cannot prepare printing.
     }
     try {
       const { result: invoice } = await checkoutLocal({
@@ -85,11 +85,11 @@ export default function CheckoutPage() {
           invoice.id,
           admin?.name ?? "الكاشير",
         );
-        await printer.print(receipt, "80mm", printWindow);
+        await printer.print(receipt, "80mm", printTarget);
         await recordLocalPrintEvent(invoice.id, "INITIAL", "80mm");
         nav(`/pos/invoices/${invoice.id}`);
       } catch {
-        printWindow?.close();
+        printer.releasePrintTarget(printTarget);
         nav(`/pos/invoices/${invoice.id}`, {
           state: {
             printError:
@@ -98,7 +98,7 @@ export default function CheckoutPage() {
         });
       }
     } catch (cause) {
-      printWindow?.close();
+      printer.releasePrintTarget(printTarget);
       setError(
         posErrorMessage(cause, "تعذر إتمام الدفع. راجع المبالغ وأعد المحاولة."),
       );

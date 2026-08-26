@@ -893,11 +893,11 @@ export function InvoiceDetailPage() {
     setBusy(true);
     setError("");
     const printer = new BrowserReceiptPrinter();
-    let printWindow: Window | undefined;
+    let printTarget: HTMLIFrameElement | undefined;
     try {
-      printWindow = printer.reservePrintWindow();
+      printTarget = printer.reservePrintFrame();
     } catch {
-      // A blocked popup must never prevent or roll back a valid payment.
+      // A print setup failure must never prevent or roll back a valid payment.
     }
     try {
       await payLocalInvoice({
@@ -914,16 +914,16 @@ export function InvoiceDetailPage() {
           admin?.name ?? "الكاشير",
           printType === "REPRINT",
         );
-        await printer.print(receipt, profile, printWindow);
+        await printer.print(receipt, profile, printTarget);
         await recordLocalPrintEvent(invoice.id, printType, profile);
       } catch {
-        printWindow?.close();
+        printer.releasePrintTarget(printTarget);
         setError(
           "تم الدفع بنجاح، لكن تعذرت الطباعة التلقائية. اضغط إعادة طباعة الإيصال.",
         );
       }
     } catch (cause) {
-      printWindow?.close();
+      printer.releasePrintTarget(printTarget);
       setError(
         posErrorMessage(cause, "تعذر الدفع. راجع حالة الفاتورة والمبلغ."),
       );

@@ -1,7 +1,7 @@
 /* Rawaqan service worker (Task 22): offline support, image caching, offline menu.
    Hand-written (no build-time precache) so it survives Vite's hashed asset names. */
 
-const VERSION = 'pos-v5';
+const VERSION = 'pos-v6';
 const SHELL_CACHE = `rawaqan-shell-${VERSION}`;
 const ASSET_CACHE = `rawaqan-assets-${VERSION}`;
 const IMAGE_CACHE = `rawaqan-images-${VERSION}`;

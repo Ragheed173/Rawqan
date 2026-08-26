@@ -25,7 +25,7 @@ export interface ReceiptPrinter {
   print(
     data: ReceiptData,
     profile?: "80mm" | "58mm",
-    reservedWindow?: Window,
+    reservedTarget?: Window | HTMLIFrameElement,
   ): Promise<void>;
 }
 
@@ -104,6 +104,38 @@ export function renderReceiptHtml(
 }
 
 export class BrowserReceiptPrinter implements ReceiptPrinter {
+  reservePrintFrame() {
+    const frame = document.createElement("iframe");
+    frame.title = "تجهيز إيصال روقان";
+    frame.setAttribute("aria-hidden", "true");
+    frame.style.position = "fixed";
+    frame.style.inset = "0";
+    frame.style.width = "0";
+    frame.style.height = "0";
+    frame.style.border = "0";
+    frame.style.opacity = "0";
+    frame.style.pointerEvents = "none";
+    document.body.appendChild(frame);
+
+    const printWindow = frame.contentWindow;
+    if (!printWindow) {
+      frame.remove();
+      throw new Error("PRINT_FRAME_UNAVAILABLE");
+    }
+    printWindow.document.open();
+    printWindow.document.write(
+      '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>جاري تجهيز الإيصال</title></head><body>جاري تجهيز الإيصال…</body></html>',
+    );
+    printWindow.document.close();
+    return frame;
+  }
+
+  releasePrintTarget(target?: Window | HTMLIFrameElement) {
+    if (!target) return;
+    if (target instanceof HTMLIFrameElement) target.remove();
+    else if (!target.closed) target.close();
+  }
+
   reservePrintWindow() {
     const popup = window.open(
       "",
@@ -121,9 +153,15 @@ export class BrowserReceiptPrinter implements ReceiptPrinter {
   async print(
     data: ReceiptData,
     profile: "80mm" | "58mm" = "80mm",
-    reservedWindow?: Window,
+    reservedTarget?: Window | HTMLIFrameElement,
   ) {
-    const popup = reservedWindow ?? this.reservePrintWindow();
+    const target = reservedTarget ?? this.reservePrintWindow();
+    const isFrame = target instanceof HTMLIFrameElement;
+    const popup = isFrame ? target.contentWindow : target;
+    if (!popup) {
+      this.releasePrintTarget(target);
+      throw new Error("PRINT_FRAME_UNAVAILABLE");
+    }
     if (popup.closed) throw new Error("PRINT_POPUP_CLOSED");
     popup.document.open();
     popup.document.write(renderReceiptHtml(data, profile));
@@ -160,6 +198,11 @@ export class BrowserReceiptPrinter implements ReceiptPrinter {
       await new Promise<void>((resolve) => popup.setTimeout(resolve, 150));
     }
     popup.focus();
+    if (isFrame) {
+      const cleanup = () => target.remove();
+      popup.addEventListener("afterprint", cleanup, { once: true });
+      window.setTimeout(cleanup, 60_000);
+    }
     popup.print();
   }
 }

@@ -12,7 +12,8 @@ const commandMocks = vi.hoisted(() => ({
   checkout: vi.fn(),
   recordPrint: vi.fn(),
   loadReceipt: vi.fn(),
-  reservePrintWindow: vi.fn(),
+  reservePrintFrame: vi.fn(),
+  releasePrintTarget: vi.fn(),
   print: vi.fn(),
 }));
 
@@ -32,7 +33,8 @@ vi.mock("../printing/receiptData", () => ({
 
 vi.mock("../printing/ReceiptPrinter", () => ({
   BrowserReceiptPrinter: class {
-    reservePrintWindow = commandMocks.reservePrintWindow;
+    reservePrintFrame = commandMocks.reservePrintFrame;
+    releasePrintTarget = commandMocks.releasePrintTarget;
     print = commandMocks.print;
   },
 }));
@@ -94,10 +96,10 @@ describe("CheckoutPage", () => {
         sortOrder: 0,
       },
     ];
-    const printWindow = { close: vi.fn() } as unknown as Window;
+    const printTarget = {} as HTMLIFrameElement;
     const invoice = { id: "invoice-1" };
     const receipt = { invoice };
-    commandMocks.reservePrintWindow.mockReturnValue(printWindow);
+    commandMocks.reservePrintFrame.mockReturnValue(printTarget);
     commandMocks.checkout.mockResolvedValue({ result: invoice });
     commandMocks.loadReceipt.mockResolvedValue(receipt);
     commandMocks.print.mockResolvedValue(undefined);
@@ -110,15 +112,15 @@ describe("CheckoutPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "تأكيد الدفع محلياً" }));
 
     await waitFor(() => expect(commandMocks.checkout).toHaveBeenCalledOnce());
-    expect(commandMocks.reservePrintWindow).toHaveBeenCalledOnce();
+    expect(commandMocks.reservePrintFrame).toHaveBeenCalledOnce();
     expect(
-      commandMocks.reservePrintWindow.mock.invocationCallOrder[0],
+      commandMocks.reservePrintFrame.mock.invocationCallOrder[0],
     ).toBeLessThan(commandMocks.checkout.mock.invocationCallOrder[0]!);
     await waitFor(() =>
       expect(commandMocks.print).toHaveBeenCalledWith(
         receipt,
         "80mm",
-        printWindow,
+        printTarget,
       ),
     );
     expect(commandMocks.recordPrint).toHaveBeenCalledWith(
