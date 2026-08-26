@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { renderReceiptHtml, type ReceiptData } from "./ReceiptPrinter";
+import {
+  calculateReceiptPageHeightMm,
+  renderReceiptHtml,
+  type ReceiptData,
+} from "./ReceiptPrinter";
 
 function fixture(): ReceiptData {
   const invoice = {
@@ -85,6 +89,10 @@ describe("receipt renderer", () => {
       const html = renderReceiptHtml(fixture(), profile);
       expect(html).toContain(`@page{size:${profile} auto;margin:0}`);
       expect(html).toContain(`width:${profile}`);
+      expect(html).toContain(
+        `width:${profile === "58mm" ? "48mm" : "72mm"}`,
+      );
+      expect(html).toContain('id="receipt-page-size"');
       expect(html).toContain('dir="rtl"');
       expect(html).toContain("unicode-bidi:embed");
       expect(html).toContain("نسخة معاد طباعتها / REPRINT");
@@ -99,4 +107,9 @@ describe("receipt renderer", () => {
       expect(html).toContain("break-inside:avoid");
     },
   );
+
+  it("adds a safe paper-feed buffer to the measured receipt height", () => {
+    expect(calculateReceiptPageHeightMm(0)).toBe(30);
+    expect(calculateReceiptPageHeightMm((96 / 25.4) * 100)).toBe(103);
+  });
 });
