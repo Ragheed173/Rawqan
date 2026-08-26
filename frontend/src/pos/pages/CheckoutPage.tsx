@@ -4,7 +4,10 @@ import { useAuthStore } from "@/store/auth";
 import { posDb } from "../db/schema";
 import { usePosLive } from "../hooks/usePosLive";
 import { addMinor } from "../types";
-import { checkoutLocal } from "../commands/localCommands";
+import {
+  checkoutLocal,
+  recordLocalPrintEvent,
+} from "../commands/localCommands";
 import { currentBusinessDate } from "../domain/businessDate";
 import { formatMinor } from "../format";
 import { posErrorMessage } from "../errors";
@@ -13,6 +16,8 @@ import {
   normalizeShekelInput,
   shekelInputToMinor,
 } from "../moneyInput";
+import { BrowserReceiptPrinter } from "../printing/ReceiptPrinter";
+import { loadReceiptData } from "../printing/receiptData";
 
 export default function CheckoutPage() {
   const { orderId } = useParams();
@@ -54,8 +59,15 @@ export default function CheckoutPage() {
     if (!userId || !orderId || busy || completed) return;
     setBusy(true);
     setError("");
+    const printer = new BrowserReceiptPrinter();
+    let printWindow: Window | undefined;
     try {
-      await checkoutLocal({
+      printWindow = printer.reservePrintWindow();
+    } catch {
+      // Payment remains available even when the browser blocks the print popup.
+    }
+    try {
+      const { result: invoice } = await checkoutLocal({
         orderId,
         userId,
         businessDate: currentBusinessDate(device),
@@ -68,8 +80,25 @@ export default function CheckoutPage() {
         ],
       });
       setCompleted(true);
-      nav("/pos/invoices");
+      try {
+        const receipt = await loadReceiptData(
+          invoice.id,
+          admin?.name ?? "الكاشير",
+        );
+        await printer.print(receipt, "80mm", printWindow);
+        await recordLocalPrintEvent(invoice.id, "INITIAL", "80mm");
+        nav(`/pos/invoices/${invoice.id}`);
+      } catch {
+        printWindow?.close();
+        nav(`/pos/invoices/${invoice.id}`, {
+          state: {
+            printError:
+              "تم الدفع بنجاح، لكن تعذرت الطباعة التلقائية. اضغط إعادة طباعة الإيصال.",
+          },
+        });
+      }
     } catch (cause) {
+      printWindow?.close();
       setError(
         posErrorMessage(cause, "تعذر إتمام الدفع. راجع المبالغ وأعد المحاولة."),
       );

@@ -22,7 +22,11 @@ export interface ReceiptData {
   isReprint?: boolean;
 }
 export interface ReceiptPrinter {
-  print(data: ReceiptData, profile?: "80mm" | "58mm"): Promise<void>;
+  print(
+    data: ReceiptData,
+    profile?: "80mm" | "58mm",
+    reservedWindow?: Window,
+  ): Promise<void>;
 }
 
 const CSS_PIXELS_PER_MM = 96 / 25.4;
@@ -100,13 +104,28 @@ export function renderReceiptHtml(
 }
 
 export class BrowserReceiptPrinter implements ReceiptPrinter {
-  async print(data: ReceiptData, profile: "80mm" | "58mm" = "80mm") {
+  reservePrintWindow() {
     const popup = window.open(
       "",
       "rawaqan-receipt",
       "popup,width=420,height=720",
     );
     if (!popup) throw new Error("PRINT_POPUP_BLOCKED");
+    popup.document.write(
+      '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>جاري تجهيز الإيصال</title></head><body style="font-family:Arial,sans-serif;text-align:center;padding:32px">جاري تثبيت الدفع وتجهيز الإيصال…</body></html>',
+    );
+    popup.document.close();
+    return popup;
+  }
+
+  async print(
+    data: ReceiptData,
+    profile: "80mm" | "58mm" = "80mm",
+    reservedWindow?: Window,
+  ) {
+    const popup = reservedWindow ?? this.reservePrintWindow();
+    if (popup.closed) throw new Error("PRINT_POPUP_CLOSED");
+    popup.document.open();
     popup.document.write(renderReceiptHtml(data, profile));
     popup.document.close();
     await new Promise<void>((resolve) => {

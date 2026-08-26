@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuthStore } from "@/store/auth";
 import { posDb } from "../db/schema";
 import { usePosLive } from "../hooks/usePosLive";
 import { splitMinorEqual } from "../types";
 import { BrowserReceiptPrinter } from "../printing/ReceiptPrinter";
+import { loadReceiptData } from "../printing/receiptData";
 import {
   closeLocalShift,
   createLocalReservation,
@@ -833,14 +834,10 @@ export function InvoicesPage() {
 
 export function InvoiceDetailPage() {
   const { id } = useParams();
+  const location = useLocation();
   const admin = useAuthStore((state) => state.admin);
   const offline = usePosLive(
     () => posDb.offlineSession.toCollection().first(),
-    undefined,
-    [],
-  );
-  const state = usePosLive(
-    () => posDb.deviceState.get("primary"),
     undefined,
     [],
   );
@@ -848,7 +845,10 @@ export function InvoiceDetailPage() {
   const [busy, setBusy] = useState(false);
   const [printBusy, setPrintBusy] = useState(false);
   const [profile, setProfile] = useState<"80mm" | "58mm">("80mm");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(
+    () =>
+      (location.state as { printError?: string } | null)?.printError ?? "",
+  );
   const invoice = usePosLive(() => posDb.invoices.get(id!), undefined, [id]);
   const items = usePosLive(
     () => posDb.invoiceLines.where("invoiceId").equals(id!).toArray(),
@@ -872,20 +872,6 @@ export function InvoiceDetailPage() {
     [],
     [id],
   );
-  const allocationModifiers = usePosLive(
-    () =>
-      posDb.invoiceAllocationModifiers
-        .toArray()
-        .then((rows) =>
-          rows.filter((row) =>
-            allocationLines.some(
-              (line) => line.id === row.invoiceAllocationLineId,
-            ),
-          ),
-        ),
-    [],
-    [id, allocationLines],
-  );
   const payments = usePosLive(
     () => posDb.payments.where("invoiceId").equals(id!).toArray(),
     [],
@@ -895,22 +881,6 @@ export function InvoiceDetailPage() {
     () => posDb.receiptPrintEvents.where("invoiceId").equals(id!).toArray(),
     [],
     [id],
-  );
-  const tableNames = usePosLive(
-    async () => {
-      if (!invoice?.orderId) return [];
-      const assignments = await posDb.orderTables
-        .where("orderId")
-        .equals(invoice.orderId)
-        .toArray();
-      const uniqueTableIds = [...new Set(assignments.map((row) => row.tableId))];
-      const tables = await posDb.restaurantTables.bulkGet(uniqueTableIds);
-      return tables.flatMap((table) =>
-        table ? [table.displayName?.trim() || table.code] : [],
-      );
-    },
-    [],
-    [invoice?.orderId],
   );
   if (!invoice) return <p>الفاتورة غير موجودة</p>;
   const due = (
@@ -922,6 +892,13 @@ export function InvoiceDetailPage() {
     if (!userId || busy) return;
     setBusy(true);
     setError("");
+    const printer = new BrowserReceiptPrinter();
+    let printWindow: Window | undefined;
+    try {
+      printWindow = printer.reservePrintWindow();
+    } catch {
+      // A blocked popup must never prevent or roll back a valid payment.
+    }
     try {
       await payLocalInvoice({
         invoiceId: invoice.id,
@@ -930,7 +907,23 @@ export function InvoiceDetailPage() {
         amountMinor: due,
         tenderedMinor: tendered ? shekelInputToMinor(tendered) : due,
       });
+      try {
+        const printType = printEvents.length > 0 ? "REPRINT" : "INITIAL";
+        const receipt = await loadReceiptData(
+          invoice.id,
+          admin?.name ?? "الكاشير",
+          printType === "REPRINT",
+        );
+        await printer.print(receipt, profile, printWindow);
+        await recordLocalPrintEvent(invoice.id, printType, profile);
+      } catch {
+        printWindow?.close();
+        setError(
+          "تم الدفع بنجاح، لكن تعذرت الطباعة التلقائية. اضغط إعادة طباعة الإيصال.",
+        );
+      }
     } catch (cause) {
+      printWindow?.close();
       setError(
         posErrorMessage(cause, "تعذر الدفع. راجع حالة الفاتورة والمبلغ."),
       );
@@ -944,22 +937,12 @@ export function InvoiceDetailPage() {
     setError("");
     try {
       const printType = printEvents.length > 0 ? "REPRINT" : "INITIAL";
-      await new BrowserReceiptPrinter().print(
-        {
-          restaurantName: state?.restaurantName ?? "روقان",
-          footer: state?.receiptFooter,
-          invoice,
-          tableNames,
-          cashierName: admin?.name ?? "الكاشير",
-          items,
-          modifiers,
-          allocationLines,
-          allocationModifiers,
-          payments,
-          isReprint: printType === "REPRINT",
-        },
-        profile,
+      const receipt = await loadReceiptData(
+        invoice.id,
+        admin?.name ?? "الكاشير",
+        printType === "REPRINT",
       );
+      await new BrowserReceiptPrinter().print(receipt, profile);
       await recordLocalPrintEvent(invoice.id, printType, profile);
     } catch {
       setError(
