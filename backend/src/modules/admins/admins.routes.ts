@@ -122,7 +122,7 @@ router.patch(
 
     const admin = await prisma.$transaction(async (tx) => {
       const updated = await tx.admin.update({ where: { id }, data });
-      if (body.isActive === false) {
+      if (body.isActive === false || body.password !== undefined) {
         await tx.refreshToken.updateMany({
           where: { adminId: id, revokedAt: null },
           data: { revokedAt: new Date() },

@@ -3,7 +3,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, ShieldCheck, UserCog, UserX } from "lucide-react";
+import {
+  KeyRound,
+  Loader2,
+  Plus,
+  ShieldCheck,
+  UserCog,
+  UserX,
+} from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { Card } from "@/components/ui/card";
@@ -46,6 +53,17 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
+const passwordSchema = z
+  .object({
+    password: z.string().min(8, "8 أحرف على الأقل"),
+    confirmPassword: z.string().min(1, "تأكيد كلمة المرور مطلوب"),
+  })
+  .refine((values) => values.password === values.confirmPassword, {
+    message: "كلمتا المرور غير متطابقتين",
+    path: ["confirmPassword"],
+  });
+type PasswordFormValues = z.infer<typeof passwordSchema>;
+
 function roleBadge(role: string) {
   const variant =
     role === "SUPER_ADMIN" ? "gold" : role === "MANAGER" ? "default" : "muted";
@@ -59,6 +77,7 @@ export default function AdminsPage() {
   const { data: admins, isLoading } = useAdminUsers();
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<AdminUser | null>(null);
+  const [passwordTarget, setPasswordTarget] = useState<AdminUser | null>(null);
 
   const {
     register,
@@ -68,6 +87,16 @@ export default function AdminsPage() {
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { role: "STAFF" },
+  });
+
+  const {
+    register: registerPassword,
+    handleSubmit: handlePasswordSubmit,
+    reset: resetPassword,
+    formState: { errors: passwordErrors },
+  } = useForm<PasswordFormValues>({
+    resolver: zodResolver(passwordSchema),
+    defaultValues: { password: "", confirmPassword: "" },
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: adminKeys.admins });
@@ -89,11 +118,27 @@ export default function AdminsPage() {
       data,
     }: {
       id: string;
-      data: { role?: AdminUser["role"]; isActive?: boolean };
+      data: {
+        role?: AdminUser["role"];
+        isActive?: boolean;
+        password?: string;
+      };
     }) => adminUserService.update(id, data),
     onSuccess: () => {
       invalidate();
       toast.success("تم التحديث");
+    },
+    onError: (err) => toast.error(getApiErrorMessage(err)),
+  });
+
+  const passwordMutation = useMutation({
+    mutationFn: ({ id, password }: { id: string; password: string }) =>
+      adminUserService.update(id, { password }),
+    onSuccess: () => {
+      invalidate();
+      toast.success("تم تغيير كلمة المرور وإلغاء الجلسات القديمة");
+      setPasswordTarget(null);
+      resetPassword();
     },
     onError: (err) => toast.error(getApiErrorMessage(err)),
   });
@@ -157,6 +202,18 @@ export default function AdminsPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      resetPassword();
+                      setPasswordTarget(a);
+                    }}
+                    aria-label={`تغيير كلمة مرور ${a.name}`}
+                    title="تغيير كلمة المرور"
+                  >
+                    <KeyRound className="h-4 w-4" />
+                  </Button>
                   <select
                     value={a.role}
                     disabled={isSelf}
@@ -282,6 +339,93 @@ export default function AdminsPage() {
                 type="button"
                 variant="outline"
                 onClick={() => setCreating(false)}
+              >
+                إلغاء
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change password dialog */}
+      <Dialog
+        open={!!passwordTarget}
+        onOpenChange={(open) => {
+          if (!open && !passwordMutation.isPending) {
+            setPasswordTarget(null);
+            resetPassword();
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              تغيير كلمة مرور {passwordTarget?.name ?? "المستخدم"}
+            </DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={handlePasswordSubmit((values) => {
+              if (!passwordTarget) return;
+              passwordMutation.mutate({
+                id: passwordTarget.id,
+                password: values.password,
+              });
+            })}
+            className="space-y-4"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="new-password">كلمة المرور الجديدة</Label>
+              <Input
+                id="new-password"
+                type="password"
+                autoComplete="new-password"
+                {...registerPassword("password")}
+                aria-invalid={!!passwordErrors.password}
+              />
+              {passwordErrors.password && (
+                <p className="text-xs text-destructive">
+                  {passwordErrors.password.message}
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">تأكيد كلمة المرور</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                autoComplete="new-password"
+                {...registerPassword("confirmPassword")}
+                aria-invalid={!!passwordErrors.confirmPassword}
+              />
+              {passwordErrors.confirmPassword && (
+                <p className="text-xs text-destructive">
+                  {passwordErrors.confirmPassword.message}
+                </p>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              سيتم إلغاء الجلسات القديمة لهذا الحساب لحماية الوصول.
+            </p>
+            <DialogFooter>
+              <Button
+                type="submit"
+                variant="gold"
+                disabled={passwordMutation.isPending}
+              >
+                {passwordMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "حفظ كلمة المرور"
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={passwordMutation.isPending}
+                onClick={() => {
+                  setPasswordTarget(null);
+                  resetPassword();
+                }}
               >
                 إلغاء
               </Button>
