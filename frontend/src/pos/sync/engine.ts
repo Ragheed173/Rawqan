@@ -35,7 +35,12 @@ async function withCrossTabLock(work: () => Promise<void>) {
   return work();
 }
 
-async function runSync(options: { retryFailed?: boolean } = {}) {
+interface RunSyncOptions {
+  retryFailed?: boolean;
+  sequenceRecoveryAttempted?: boolean;
+}
+
+async function runSync(options: RunSyncOptions = {}) {
   const state = await posDb.deviceState.get("primary");
   if (!state) return;
   // The exclusive browser lock means any rows left in SYNCING came from an
@@ -62,13 +67,14 @@ async function runSync(options: { retryFailed?: boolean } = {}) {
       attempts: operation.attempts + 1,
     });
     try {
-      await unwrap(
+      const results = await unwrap<unknown[]>(
         api.post(
           "/pos/sync/push",
           { deviceId: state.deviceId, operations: [wire(operation)] },
           { headers: { "x-pos-device-id": state.deviceId } },
         ),
       );
+      await reconcilePushResult(operation, results[0]);
       await posDb.syncOperations.update(operation.operationId, {
         status: "SUCCEEDED",
         processedAt: new Date().toISOString(),
@@ -79,7 +85,25 @@ async function runSync(options: { retryFailed?: boolean } = {}) {
       const attempts = operation.attempts + 1;
       const delay = Math.min(300_000, 1000 * 2 ** Math.min(attempts, 8));
       const code = posErrorCode(error) ?? "BACKEND_UNAVAILABLE";
-      const conflict = code === "SYNC_CONFLICT" || code === "VERSION_CONFLICT";
+      if (
+        code === "SYNC_SEQUENCE_CONFLICT" &&
+        !options.sequenceRecoveryAttempted
+      ) {
+        const bootstrap = await unwrap<Parameters<typeof applyBootstrap>[0]>(
+          api.get(`/pos/bootstrap?deviceId=${state.deviceId}`, {
+            headers: { "x-pos-device-id": state.deviceId },
+          }),
+        );
+        await applyBootstrap(bootstrap);
+        return runSync({
+          retryFailed: true,
+          sequenceRecoveryAttempted: true,
+        });
+      }
+      const conflict =
+        code === "SYNC_CONFLICT" ||
+        code === "VERSION_CONFLICT" ||
+        code === "CONFLICT";
       await posDb.syncOperations.update(operation.operationId, {
         status: conflict ? "CONFLICT" : "FAILED",
         nextAttemptAt: conflict
@@ -104,6 +128,71 @@ async function runSync(options: { retryFailed?: boolean } = {}) {
     timezone: pull.configuration.settings?.timezone,
     businessDayCutoff: pull.configuration.settings?.businessDayCutoff,
     restaurantName: pull.configuration.settings?.name,
+  });
+}
+
+interface InvoiceIdentity {
+  id: string;
+  invoiceNumber: string;
+}
+
+function invoiceIdentities(
+  operation: SyncOperation,
+  result: unknown,
+): InvoiceIdentity[] {
+  if (!result || typeof result !== "object") return [];
+  const record = result as Record<string, unknown>;
+  const candidates =
+    operation.operationType === "FINALIZE_EQUAL_SPLIT" &&
+    Array.isArray(record.invoices)
+      ? record.invoices
+      : operation.operationType === "FINALIZE_INVOICE"
+        ? [record]
+        : [];
+  return candidates.filter((candidate): candidate is InvoiceIdentity => {
+    if (!candidate || typeof candidate !== "object") return false;
+    const invoice = candidate as Record<string, unknown>;
+    return typeof invoice.id === "string" && typeof invoice.invoiceNumber === "string";
+  });
+}
+
+/**
+ * Reconciles a locally reserved invoice number with the canonical number
+ * returned by the server. Staging both sides avoids violating IndexedDB's
+ * unique invoice-number index when two browser contexts reserved the same
+ * sequence.
+ */
+export async function reconcilePushResult(
+  operation: SyncOperation,
+  result: unknown,
+) {
+  const identities = invoiceIdentities(operation, result);
+  if (!identities.length) return;
+
+  await posDb.transaction("rw", posDb.invoices, async () => {
+    for (const invoice of identities) {
+      if (await posDb.invoices.get(invoice.id)) {
+        await posDb.invoices.update(invoice.id, {
+          invoiceNumber: `LOCAL-PENDING-${invoice.id}`,
+        });
+      }
+    }
+    for (const invoice of identities) {
+      const occupied = await posDb.invoices
+        .where("invoiceNumber")
+        .equals(invoice.invoiceNumber)
+        .first();
+      if (occupied && occupied.id !== invoice.id) {
+        await posDb.invoices.update(occupied.id, {
+          invoiceNumber: `LOCAL-PENDING-${occupied.id}`,
+        });
+      }
+      if (await posDb.invoices.get(invoice.id)) {
+        await posDb.invoices.update(invoice.id, {
+          invoiceNumber: invoice.invoiceNumber,
+        });
+      }
+    }
   });
 }
 

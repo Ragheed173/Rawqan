@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { posDb } from "../db/schema";
+import type { SyncOperation } from "../types";
 import {
   orderDueOperations,
   applyBootstrap,
@@ -8,6 +9,7 @@ import {
   reconcileLocalSequence,
   recoverInterruptedOperations,
   applyServerPosCacheEpoch,
+  reconcilePushResult,
 } from "./engine";
 
 beforeEach(async () => { posDb.close(); await posDb.delete(); await posDb.open(); });
@@ -245,6 +247,51 @@ describe("POS sync recovery", () => {
     await posDb.syncOperations.put({ operationId: "op", deviceId: "device", localSequence: "1", requestHash: "hash", operationType: "OPEN_ORDER", payload: {}, dependencies: [], status: "SYNCING", attempts: 1, createdAt: new Date().toISOString() });
     await recoverInterruptedOperations();
     expect(await posDb.syncOperations.get("op")).toMatchObject({ status: "FAILED", errorCode: "SYNC_INTERRUPTED", nextAttemptAt: expect.any(String) });
+  });
+
+  it("safely applies a server-renumbered invoice without losing either local invoice", async () => {
+    const invoice = (id: string, invoiceNumber: string) => ({
+      id,
+      invoiceNumber,
+      orderId: `${id}-order`,
+      status: "PAID",
+      businessDate: "2026-08-27",
+      subtotalMinor: "1500",
+      discountMinor: "0",
+      totalMinor: "1500",
+      refundedMinor: "0",
+      cashierId: "cashier",
+      deviceId: "device",
+      issuedAt: "2026-08-27T00:00:00.000Z",
+    });
+    await posDb.invoices.bulkPut([
+      invoice("invoice-a", "RWQ-P01-2026-000001"),
+      invoice("invoice-b", "RWQ-P01-2026-000002"),
+    ]);
+    const operation: SyncOperation = {
+      operationId: "finalize-a",
+      deviceId: "device",
+      localSequence: "1",
+      requestHash: "hash",
+      operationType: "FINALIZE_INVOICE",
+      payload: { id: "invoice-a" },
+      dependencies: [],
+      status: "SYNCING",
+      attempts: 1,
+      createdAt: "2026-08-27T00:00:00.000Z",
+    };
+
+    await reconcilePushResult(operation, {
+      id: "invoice-a",
+      invoiceNumber: "RWQ-P01-2026-000002",
+    });
+
+    expect(await posDb.invoices.get("invoice-a")).toMatchObject({
+      invoiceNumber: "RWQ-P01-2026-000002",
+    });
+    expect(await posDb.invoices.get("invoice-b")).toMatchObject({
+      invoiceNumber: "LOCAL-PENDING-invoice-b",
+    });
   });
 
   it("removes a stale local open shift when the server has none", async () => {

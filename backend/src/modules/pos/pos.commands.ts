@@ -399,9 +399,18 @@ async function nextInvoiceNumber(tx: PosTx, deviceCode: string, businessDate: Da
   const prefix = `RWQ-${deviceCode}-${year}-`;
   if (supplied) {
     posAssert(new RegExp(`^RWQ-${deviceCode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-${year}-\\d{6}$`).test(supplied), "SYNC_CONFLICT", "Invoice number does not match device/year format");
-    return supplied;
   }
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`rawaqan:${prefix}`}))`;
+  // A browser reinstall or two POS contexts can reuse an offline invoice
+  // sequence. Keep the client-provided number when it is free; otherwise
+  // allocate the next canonical server number while holding the same lock.
+  if (supplied) {
+    const occupied = await tx.invoice.findUnique({
+      where: { invoiceNumber: supplied },
+      select: { id: true },
+    });
+    if (!occupied) return supplied;
+  }
   const latest = await tx.invoice.findFirst({ where: { invoiceNumber: { startsWith: prefix } }, orderBy: { invoiceNumber: "desc" }, select: { invoiceNumber: true } });
   const next = latest ? Number(latest.invoiceNumber.slice(prefix.length)) + 1 : 1;
   posAssert(next <= 999_999, "SYNC_CONFLICT", "Invoice sequence exhausted for this device/year");

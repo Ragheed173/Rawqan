@@ -21,6 +21,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
       'SHIFT_ALREADY_OPEN',
       'ALREADY_APPLIED',
       'SYNC_CONFLICT',
+      'SYNC_SEQUENCE_CONFLICT',
     ]);
     status = notFound.has(err.code) ? 404 : forbidden.has(err.code) ? 403 : conflict.has(err.code) ? 409 : err.code === 'OFFLINE_CAPABILITY_EXPIRED' ? 401 : 400;
     code = err.code;

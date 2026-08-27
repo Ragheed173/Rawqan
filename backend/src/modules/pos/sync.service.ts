@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma, type AdminRole } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { writeActivity } from "../../lib/activityLog.js";
 import { hashOperationRequest } from "../../domain/pos/operations.js";
@@ -7,7 +7,6 @@ import { toJsonSafe } from "../../utils/json.js";
 import * as commands from "./pos.commands.js";
 import * as schemas from "./pos.schemas.js";
 import { ROLE_PERMISSIONS, roleHas, type Permission } from "../../config/permissions.js";
-import type { AdminRole } from "@prisma/client";
 
 export interface PushOperation {
   operationId: string;
@@ -32,6 +31,27 @@ export const SYNC_OPERATION_PERMISSIONS: Readonly<Partial<Record<string, Permiss
 export function assertSyncOperationPermission(role: AdminRole, operationType: string) {
   const required = SYNC_OPERATION_PERMISSIONS[operationType];
   posAssert(!required || roleHas(role, required), "PERMISSION_DENIED", `Permission ${required} is required for ${operationType}`);
+}
+
+function isLocalSequenceUniqueConflict(error: unknown) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") return false;
+  const target = Array.isArray(error.meta?.target)
+    ? error.meta.target.map(String).join(",")
+    : String(error.meta?.target ?? "");
+  const normalized = target.toLowerCase().replaceAll("_", "");
+  return normalized.includes("deviceid") && normalized.includes("localsequence");
+}
+
+async function localSequenceConflict(deviceId: string) {
+  const latest = await prisma.syncOperation.aggregate({
+    where: { deviceId },
+    _max: { localSequence: true },
+  });
+  return new PosDomainError(
+    "SYNC_SEQUENCE_CONFLICT",
+    "The local operation sequence is already assigned to another operation",
+    { nextLocalSequence: ((latest._max.localSequence ?? 0n) + 1n).toString() },
+  );
 }
 
 function parseId(payload: Record<string, unknown>) {
@@ -89,6 +109,18 @@ export async function pushOperations(actorId: string, deviceId: string, operatio
       if (existing.status === "SUCCEEDED") { results.push(existing.result); continue; }
       if (existing.status === "CONFLICT") throw new PosDomainError("SYNC_CONFLICT", existing.errorMessage ?? "Operation is conflicted");
     }
+    const sequenceOwner = await prisma.syncOperation.findUnique({
+      where: {
+        deviceId_localSequence: {
+          deviceId,
+          localSequence: operation.localSequence,
+        },
+      },
+      select: { operationId: true },
+    });
+    if (sequenceOwner && sequenceOwner.operationId !== operation.operationId) {
+      throw await localSequenceConflict(deviceId);
+    }
     const succeededDependencies = operation.dependencies.length ? await prisma.syncOperation.count({ where: { operationId: { in: operation.dependencies }, status: "SUCCEEDED" } }) : 0;
     posAssert(succeededDependencies === operation.dependencies.length, "SYNC_DEPENDENCY_MISSING", "One or more operation dependencies have not succeeded");
     try {
@@ -103,6 +135,12 @@ export async function pushOperations(actorId: string, deviceId: string, operatio
       });
       results.push(result);
     } catch (error) {
+      // The failed operation cannot be stored under a sequence already owned
+      // by another operation. Return a recoverable, explicit error so the POS
+      // can bootstrap the server cursor and safely rebase its local queue.
+      if (isLocalSequenceUniqueConflict(error)) {
+        throw await localSequenceConflict(deviceId);
+      }
       const code = error instanceof PosDomainError ? error.code : "FAILED";
       const message = error instanceof Error ? error.message : "Sync operation failed";
       await prisma.syncOperation.upsert({ where: { operationId: operation.operationId }, create: { operationId: operation.operationId, deviceId, localSequence: operation.localSequence, requestHash: operation.requestHash, operationType: operation.operationType, status: code === "SYNC_CONFLICT" ? "CONFLICT" : "FAILED", errorCode: code, errorMessage: message, processedAt: new Date() }, update: { status: code === "SYNC_CONFLICT" ? "CONFLICT" : "FAILED", errorCode: code, errorMessage: message, processedAt: new Date() } });
