@@ -1,4 +1,4 @@
-import { Outlet, NavLink } from "react-router-dom";
+import { Link, Outlet, NavLink } from "react-router-dom";
 import { useEffect, useState } from "react";
 import {
   Wifi,
@@ -10,6 +10,7 @@ import {
   Clock,
   AlertTriangle,
   Stethoscope,
+  LayoutDashboard,
 } from "lucide-react";
 import { posDb } from "../db/schema";
 import {
@@ -175,7 +176,13 @@ export function PosLayout() {
   return (
     <div dir="rtl" className="pos-theme min-h-screen">
       <header className="pos-header sticky top-0 z-40 flex min-h-16 flex-wrap items-center justify-between gap-3 px-4 py-2.5">
-        <div className="text-xl font-bold">روقان POS</div>
+        <div className="flex items-center gap-3">
+          <div className="text-xl font-bold">روقان POS</div>
+          <Link to="/admin" className="pos-dashboard-link">
+            <LayoutDashboard className="h-4 w-4" />
+            لوحة التحكم
+          </Link>
+        </div>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span
             className={cn(
