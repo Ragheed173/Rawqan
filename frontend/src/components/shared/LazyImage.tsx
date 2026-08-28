@@ -1,4 +1,4 @@
-import { useState, type ImgHTMLAttributes } from 'react';
+import { useEffect, useState, type ImgHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 import { DEFAULT_IMAGE_WIDTHS, imageSrcSet, optimizedImageUrl } from '@/lib/images';
 
@@ -21,6 +21,7 @@ export function LazyImage({
   className,
   alt = '',
   onLoad,
+  onError,
   src,
   sizes,
   widths = DEFAULT_IMAGE_WIDTHS,
@@ -28,18 +29,26 @@ export function LazyImage({
 }: LazyImageProps) {
   const [loaded, setLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
+  const hasSource = typeof src === 'string' && src.trim().length > 0;
+
+  useEffect(() => {
+    setLoaded(false);
+    setErrored(false);
+  }, [src]);
 
   // Right-size CDN images: srcset lets the browser pick the smallest fit,
   // and the plain src falls back to a mid-size variant instead of the original.
-  const srcSet = src ? imageSrcSet(src, widths) : undefined;
-  const effectiveSrc = src && srcSet ? optimizedImageUrl(src, widths[Math.min(2, widths.length - 1)]) : src;
+  const srcSet = hasSource ? imageSrcSet(src, widths) : undefined;
+  const effectiveSrc = hasSource && srcSet
+    ? optimizedImageUrl(src, widths[Math.min(2, widths.length - 1)])
+    : src;
 
   return (
     <div className={cn('relative overflow-hidden bg-muted/50', wrapperClassName)}>
-      {!loaded && !errored && <div className="skeleton absolute inset-0" />}
-      {errored ? (
+      {hasSource && !loaded && !errored && <div className="skeleton absolute inset-0" />}
+      {!hasSource || errored ? (
         <div className="absolute inset-0 grid place-items-center text-muted-foreground text-xs">
-          لا توجد صورة
+          الصورة غير متوفرة
         </div>
       ) : (
         <img
@@ -61,7 +70,10 @@ export function LazyImage({
             setLoaded(true);
             onLoad?.(e);
           }}
-          onError={() => setErrored(true)}
+          onError={(e) => {
+            setErrored(true);
+            onError?.(e);
+          }}
           {...props}
         />
       )}
