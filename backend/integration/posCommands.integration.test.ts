@@ -56,6 +56,28 @@ async function orderWithCustomItem(quantity: number, price: string, modifierOpti
 }
 
 describe("transactional POS commands on PostgreSQL", () => {
+  it("replays the same offline shift open and close without duplicating state", async () => {
+    const suffix = randomUUID();
+    const [actor, device] = await Promise.all([
+      prisma.admin.create({ data: { email: `shift-${suffix}@test.local`, passwordHash: "not-used", name: "Shift Replay Test", role: "SUPER_ADMIN" } }),
+      prisma.posDevice.create({ data: { code: `R${suffix.slice(0, 6)}`, name: "Shift Replay Test" } }),
+    ]);
+    const context = { actorId: actor.id, deviceId: device.id };
+    const shiftId = randomUUID();
+    const opened = await openShift({ id: shiftId, openingCashMinor: 2500n }, context);
+    const replayedOpen = await openShift({ id: shiftId, openingCashMinor: 2500n }, context);
+    expect(replayedOpen.id).toBe(opened.id);
+    expect(await prisma.cashierShift.count({ where: { userId: actor.id, deviceId: device.id } })).toBe(1);
+    await expect(openShift({ id: shiftId, openingCashMinor: 2600n }, context)).rejects.toMatchObject({ code: "SYNC_CONFLICT" });
+    await expect(openShift({ id: randomUUID(), openingCashMinor: 2500n }, context)).rejects.toMatchObject({ code: "SHIFT_ALREADY_OPEN" });
+
+    const closed = await closeShift(shiftId, { actualClosingCashMinor: 2500n }, context);
+    const replayedClose = await closeShift(shiftId, { actualClosingCashMinor: 2500n }, context);
+    expect(replayedClose.id).toBe(closed.id);
+    expect(replayedClose.status).toBe("CLOSED");
+    await expect(closeShift(shiftId, { actualClosingCashMinor: 2600n }, context)).rejects.toMatchObject({ code: "SYNC_CONFLICT" });
+  });
+
   it("finalizes an immutable cash invoice and releases its table", async () => {
     const { table, orderId } = await orderWithItem();
     const invoice = await finalizeInvoice({ orderId, expectedVersion: 2, invoiceNumber: `RWQ-${(await prisma.posDevice.findUniqueOrThrow({ where: { id: fixture.deviceId } })).code}-2026-000001`, payments: [{ method: "CASH", amountMinor: 5000n, tenderedMinor: 6000n }] }, fixture);

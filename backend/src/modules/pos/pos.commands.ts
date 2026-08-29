@@ -845,6 +845,12 @@ export function openShift(input: { id?: string; openingCashMinor: bigint }, cont
     const { actor, device } = await loadContext(tx, context);
     posAssert(input.openingCashMinor >= 0n, "INVALID_PAYMENT_TOTAL", "Opening cash cannot be negative");
     const current = await tx.cashierShift.findFirst({ where: { userId: actor.id, deviceId: device.id, status: "OPEN" } });
+    // Offline delivery is at-least-once. If the exact client-reserved shift was
+    // already opened, its desired state is satisfied and the retry is safe.
+    if (current && input.id === current.id) {
+      posAssert(current.openingCashMinor === input.openingCashMinor, "SYNC_CONFLICT", "Repeated shift open has different opening cash");
+      return current;
+    }
     posAssert(!current, "SHIFT_ALREADY_OPEN", "A shift is already open for this cashier and device");
     const shift = await tx.cashierShift.create({ data: { id: input.id, userId: actor.id, userNameSnapshot: actor.name, userRoleSnapshot: actor.role, deviceId: device.id, businessDate: await getBusinessDate(tx), openingCashMinor: input.openingCashMinor, expectedCashMinor: input.openingCashMinor } });
     await writeActivity({ ...actorAudit(actor), action: "SHIFT_OPENED", entityType: "CashierShift", entityId: shift.id, deviceId: device.id, operationId: context.operationId, afterData: { openingCashMinor: shift.openingCashMinor.toString() } }, tx);
@@ -856,7 +862,13 @@ export function closeShift(shiftId: string, input: { actualClosingCashMinor: big
   return inTransaction(async (tx) => {
     const { actor, device } = await loadContext(tx, context);
     const shift = await tx.cashierShift.findUnique({ where: { id: shiftId } });
-    posAssert(shift && shift.userId === actor.id && shift.deviceId === device.id && shift.status === "OPEN", "SHIFT_NOT_OPEN", "Open shift not found for this cashier/device");
+    posAssert(shift && shift.userId === actor.id && shift.deviceId === device.id, "SHIFT_NOT_OPEN", "Open shift not found for this cashier/device");
+    // A repeated offline close for the same shift is also already fulfilled.
+    if (shift.status === "CLOSED") {
+      posAssert(shift.actualClosingCashMinor === input.actualClosingCashMinor, "SYNC_CONFLICT", "Repeated shift close has different actual cash");
+      return shift;
+    }
+    posAssert(shift.status === "OPEN", "SHIFT_NOT_OPEN", "Open shift not found for this cashier/device");
     const reconciliation = reconcileShift(shift.openingCashMinor, shift.cashSalesMinor, shift.cashRefundsMinor, input.actualClosingCashMinor);
     const closed = await tx.cashierShift.update({ where: { id: shiftId }, data: { status: "CLOSED", expectedCashMinor: reconciliation.expectedCashMinor, actualClosingCashMinor: input.actualClosingCashMinor, differenceMinor: reconciliation.differenceMinor, closedAt: new Date() } });
     await writeActivity({ ...actorAudit(actor), action: "SHIFT_CLOSED", entityType: "CashierShift", entityId: shift.id, deviceId: device.id, operationId: context.operationId, beforeData: { status: shift.status }, afterData: { status: closed.status, expectedCashMinor: closed.expectedCashMinor.toString(), actualClosingCashMinor: input.actualClosingCashMinor.toString(), differenceMinor: reconciliation.differenceMinor!.toString() } }, tx);
