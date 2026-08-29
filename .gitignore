@@ -36,6 +36,10 @@ backend/uploads/
 # Coverage
 coverage/
 
+# Full PostgreSQL backups contain operational and financial data.
+# Keep them outside Git and move verified copies to encrypted storage.
+backups/
+
 # Vite
 frontend/.vite/
 
