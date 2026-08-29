@@ -14,6 +14,7 @@
     "test:unit": "vitest run",
     "test:integration": "node scripts/run-integration-tests.mjs",
     "test:load:readonly": "tsx scripts/load-test-readonly.ts",
+    "catalog:mirror-images": "tsx scripts/mirror-catalog-images.ts",
     "test:watch": "vitest",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
