@@ -19,7 +19,8 @@
     "db:seed": "npm run db:seed --workspace backend",
     "db:studio": "npm run db:studio --workspace backend",
     "db:backup:full": "npm run db:backup:full --workspace backend",
-    "db:restore:verify": "npm run db:restore:verify --workspace backend"
+    "db:restore:verify": "npm run db:restore:verify --workspace backend",
+    "test:load:readonly": "npm run test:load:readonly --workspace backend"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
