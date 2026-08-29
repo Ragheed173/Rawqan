@@ -87,6 +87,15 @@ export const adminItemService = {
 };
 
 // ─── Image uploads ───────────────────────────────────────────
+export interface CatalogImageMirrorBatch {
+  selected: number;
+  mirrored: number;
+  failures: { id: string; message: string }[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  remaining: number;
+}
+
 export const adminUploadService = {
   /** Generic single upload → { url, publicId }. Used for logos/covers/category images. */
   uploadOne: (file: File, folder?: string) => {
@@ -112,6 +121,13 @@ export const adminUploadService = {
     api.delete(`/admin/uploads/images/${imageId}`),
   setPrimary: (imageId: string) =>
     api.patch(`/admin/uploads/images/${imageId}/primary`),
+  mirrorExternalCatalogImages: (cursor?: string) =>
+    unwrap<CatalogImageMirrorBatch>(
+      api.post("/admin/uploads/catalog/mirror-external", {
+        ...(cursor ? { cursor } : {}),
+        limit: 3,
+      }),
+    ),
 };
 
 // ─── Tags ────────────────────────────────────────────────────

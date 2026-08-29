@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Save, Trash2 } from 'lucide-react';
+import { CloudDownload, Loader2, Save, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/admin/PageHeader';
 import { Card } from '@/components/ui/card';
@@ -55,6 +55,7 @@ export default function AdminSettingsPage() {
   const [hours, setHours] = useState<OpeningHour[]>([]);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [mirrorResult, setMirrorResult] = useState<{ mirrored: number; failed: number; remaining: number } | null>(null);
 
   const { register, handleSubmit, reset } = useForm<SettingsForm>();
 
@@ -104,6 +105,34 @@ export default function AdminSettingsPage() {
       toast.success('تم حفظ ساعات العمل');
     },
     onError: (err) => toast.error(getApiErrorMessage(err)),
+  });
+
+  const mirrorMutation = useMutation({
+    mutationFn: async () => {
+      let cursor: string | undefined;
+      let mirrored = 0;
+      let failed = 0;
+      let remaining = 0;
+
+      for (let batch = 0; batch < 100; batch += 1) {
+        const result = await adminUploadService.mirrorExternalCatalogImages(cursor);
+        mirrored += result.mirrored;
+        failed += result.failures.length;
+        remaining = result.remaining;
+        setMirrorResult({ mirrored, failed, remaining });
+
+        if (!result.hasMore || !result.nextCursor) break;
+        cursor = result.nextCursor;
+      }
+
+      return { mirrored, failed, remaining };
+    },
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['menu'] });
+      if (result.remaining === 0) toast.success(`تم تثبيت ${result.mirrored} صورة على Cloudinary`);
+      else toast.warning(`تم تثبيت ${result.mirrored} صورة، وبقيت ${result.remaining} لإعادة المحاولة`);
+    },
+    onError: (err) => toast.error(getApiErrorMessage(err, 'تعذر نقل صور الكتالوج')),
   });
 
   const uploadImage = async (files: File[], kind: 'logo' | 'cover') => {
@@ -206,6 +235,29 @@ export default function AdminSettingsPage() {
                   <ImageDropzone onFiles={(f) => uploadImage(f, 'cover')} multiple={false} uploading={uploadingCover} label="غلاف" />
                 )}
               </div>
+            </div>
+
+            <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4">
+              <div>
+                <p className="font-medium">تثبيت صور الكتالوج</p>
+                <p className="text-sm text-muted-foreground">
+                  ينقل صور المنيو المستوردة إلى Cloudinary الخاص بالمطعم دون تغيير الأصناف أو الأسعار.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => { setMirrorResult(null); mirrorMutation.mutate(); }}
+                disabled={mirrorMutation.isPending}
+              >
+                {mirrorMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />}
+                {mirrorMutation.isPending ? 'جارٍ تثبيت الصور...' : 'تثبيت الصور على Cloudinary'}
+              </Button>
+              {mirrorResult && (
+                <p className="text-sm text-muted-foreground" role="status">
+                  تم: {mirrorResult.mirrored} · فشل: {mirrorResult.failed} · المتبقي: {mirrorResult.remaining}
+                </p>
+              )}
             </div>
           </Card>
 

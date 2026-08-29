@@ -11,6 +11,8 @@ import { sendCreated, sendNoContent, sendSuccess } from "../../utils/http.js";
 import { serializeImage } from "../menu/menu.serializers.js";
 import { upload } from "./multer.js";
 import { recordCatalogChange } from "../menu/catalogRevision.js";
+import { cloudinaryEnabled } from "../../lib/cloudinary.js";
+import { mirrorExternalCatalogImageBatch } from "./catalogImageMirror.service.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -19,6 +21,22 @@ const itemParam = z.object({ itemId: z.string().cuid() });
 const imageParam = z.object({ imageId: z.string().cuid() });
 const imagePatch = z.object({ alt: z.string().trim().max(200).nullable().optional(), sortOrder: z.number().int().optional() });
 const imageOrder = z.object({ images: z.array(z.object({ id: z.string().cuid(), sortOrder: z.number().int() })).min(1) });
+const mirrorBatch = z.object({
+  cursor: z.string().trim().min(1).max(200).optional(),
+  limit: z.number().int().min(1).max(5).default(3),
+});
+
+/** Mirrors imported third-party catalog images into the restaurant's Cloudinary account. */
+router.post(
+  "/catalog/mirror-external",
+  requirePermission("import:manage"),
+  validate({ body: mirrorBatch }),
+  asyncHandler(async (req, res) => {
+    if (!cloudinaryEnabled) throw ApiError.internal("Cloudinary is not configured");
+    const result = await mirrorExternalCatalogImageBatch(req.body);
+    return sendSuccess(res, result);
+  }),
+);
 
 /** Generic single-file upload → returns a Cloudinary URL (used for logos, covers, category images). */
 router.post(
