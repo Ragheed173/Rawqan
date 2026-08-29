@@ -1,4 +1,5 @@
 import { useEffect, useState, type ImgHTMLAttributes } from 'react';
+import { ImageOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DEFAULT_IMAGE_WIDTHS, imageSrcSet, optimizedImageUrl } from '@/lib/images';
 
@@ -47,8 +48,15 @@ export function LazyImage({
     <div className={cn('relative overflow-hidden bg-muted/50', wrapperClassName)}>
       {hasSource && !loaded && !errored && <div className="skeleton absolute inset-0" />}
       {!hasSource || errored ? (
-        <div className="absolute inset-0 grid place-items-center text-muted-foreground text-xs">
-          الصورة غير متوفرة
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-muted via-muted/80 to-background px-4 text-center text-muted-foreground"
+          role="img"
+          aria-label={alt || 'الصورة غير متوفرة'}
+        >
+          <span className="grid h-12 w-12 place-items-center rounded-full border border-border bg-card/80 shadow-sm">
+            <ImageOff className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <span className="text-sm font-medium">الصورة غير متوفرة</span>
         </div>
       ) : (
         <img

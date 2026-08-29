@@ -7,7 +7,7 @@ describe('LazyImage', () => {
     render(<LazyImage alt="صنف بدون صورة" />);
 
     expect(screen.getByText('الصورة غير متوفرة')).toBeInTheDocument();
-    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'صنف بدون صورة' })).toBeInTheDocument();
   });
 
   it('shows the fallback and forwards the error event when loading fails', () => {

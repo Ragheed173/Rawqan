@@ -27,6 +27,11 @@ const days: Record<string, string> = {
 export function Footer() {
   const { data: settings } = useSettings();
   const year = new Date().getFullYear();
+  const configuredFooter = settings?.footerText?.trim();
+  const copyright = configuredFooter || `روقان © ${year}`;
+  const completeCopyright = copyright.includes('جميع الحقوق محفوظة')
+    ? copyright
+    : `${copyright} · جميع الحقوق محفوظة`;
 
   const socials = [
     { href: settings?.instagram, icon: Instagram, label: 'إنستغرام' },
@@ -102,7 +107,7 @@ export function Footer() {
       </div>
 
       <div className="flex flex-col items-center gap-4 border-t border-white/10 py-5 text-center text-xs text-white/50 sm:flex-row sm:justify-between sm:px-6">
-        <span>{settings?.footerText ?? `روقان © ${year}`} · جميع الحقوق محفوظة</span>
+        <span>{completeCopyright}</span>
         <ThemeToggle />
       </div>
     </footer>
