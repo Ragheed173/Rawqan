@@ -70,10 +70,13 @@ describe("transactional POS commands on PostgreSQL", () => {
     expect(await prisma.invoice.count()).toBe(before); expect((await prisma.order.findUniqueOrThrow({ where: { id: orderId } })).status).toBe("OPEN");
   });
 
-  it("rejects an invoice-number collision for a different invoice UUID", async () => {
+  it("allocates the next canonical invoice number when an offline number collides", async () => {
     const first = await orderWithItem(); const device = await prisma.posDevice.findUniqueOrThrow({ where: { id: fixture.deviceId } }); const invoiceNumber = `RWQ-${device.code}-2026-000002`;
     await finalizeInvoice({ orderId: first.orderId, expectedVersion: 2, invoiceNumber, payments: [{ method: "VISA", amountMinor: 5000n }] }, fixture);
-    const second = await orderWithItem(); await expect(finalizeInvoice({ orderId: second.orderId, expectedVersion: 2, invoiceNumber, payments: [{ method: "VISA", amountMinor: 5000n }] }, fixture)).rejects.toMatchObject({ code: "P2002" });
+    const second = await orderWithItem(); const reassigned = await finalizeInvoice({ orderId: second.orderId, expectedVersion: 2, invoiceNumber, payments: [{ method: "VISA", amountMinor: 5000n }] }, fixture);
+    expect(reassigned.invoiceNumber).not.toBe(invoiceNumber);
+    expect(reassigned.invoiceNumber).toMatch(new RegExp(`^RWQ-${device.code}-2026-\\d{6}$`));
+    expect(await prisma.invoice.count({ where: { invoiceNumber: { in: [invoiceNumber, reassigned.invoiceNumber] } } })).toBe(2);
   });
 
   it("returns the saved result when the same sync operation is retried", async () => {
