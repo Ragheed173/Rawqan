@@ -59,7 +59,8 @@ Deploy `frontend/dist` to your static host. Add a SPA rewrite so all routes serv
 (e.g. Netlify `/* /index.html 200`, Vercel rewrites, or Nginx `try_files $uri /index.html`).
 
 ## 4. Reverse proxy (single-domain, recommended)
-Serve the SPA at `/` and proxy `/api`, `/sitemap.xml`, `/robots.txt`, `/health` to the API.
+Serve the SPA at `/` and proxy `/api`, `/sitemap.xml`, `/robots.txt`, `/health`,
+and `/ready` to the API.
 This keeps cookies first-party and avoids CORS entirely.
 
 ## 5. One-command Docker deployment (recommended)
@@ -99,6 +100,7 @@ typecheck + build → frontend build → Docker image builds for both services. 
 - [ ] SPA fallback rewrite configured on the static host
 - [ ] `prisma migrate deploy` run; schema in sync
 - [ ] `/health` returns 200 behind the proxy
+- [ ] `/ready` returns 200 and reports PostgreSQL ready
 - [ ] Rate limiting verified (login throttles after repeated failures)
 - [ ] `robots.txt` disallows `/admin`; `sitemap.xml` resolves
 - [ ] Backups + log/monitoring in place

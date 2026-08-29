@@ -10,9 +10,15 @@ import { errorHandler } from './middleware/error.js';
 import { notFound } from './middleware/notFound.js';
 import { apiRouter } from './routes.js';
 import seoRouter from './modules/seo/seo.routes.js';
+import { checkDatabaseReadiness, type DatabaseReadiness } from './ops/readiness.js';
 
-export function createApp() {
+interface AppOptions {
+  readinessCheck?: () => Promise<DatabaseReadiness>;
+}
+
+export function createApp(options: AppOptions = {}) {
   const app = express();
+  const readinessCheck = options.readinessCheck ?? checkDatabaseReadiness;
 
   app.set('trust proxy', 1);
 
@@ -39,7 +45,33 @@ export function createApp() {
   app.use(cookieParser());
   if (isDev) app.use(morgan('dev'));
 
-  app.get('/health', (_req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
+  // Liveness: confirms that the Node process can answer HTTP requests. Keep
+  // this independent of dependencies so orchestrators do not restart a healthy
+  // process during a transient database outage.
+  app.get('/health', (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ status: 'ok', uptime: process.uptime() });
+  });
+
+  // Readiness: safe for Render and external monitors. It only reports whether
+  // PostgreSQL answered and never exposes connection details or raw errors.
+  app.get('/ready', async (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+      const database = await readinessCheck();
+      res.json({
+        status: 'ready',
+        uptime: process.uptime(),
+        checks: { database: { status: 'ok', latencyMs: database.latencyMs } },
+      });
+    } catch {
+      res.status(503).json({
+        status: 'unavailable',
+        uptime: process.uptime(),
+        checks: { database: { status: 'error' } },
+      });
+    }
+  });
 
   // SEO (served at root: /sitemap.xml, /robots.txt)
   app.use('/', seoRouter);

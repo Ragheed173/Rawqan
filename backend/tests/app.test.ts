@@ -17,6 +17,36 @@ describe('health & 404', () => {
     expect(res.body.status).toBe('ok');
   });
 
+  it('GET /ready → 200 only when PostgreSQL is reachable', async () => {
+    const readyApp = createApp({
+      readinessCheck: async () => ({ latencyMs: 7 }),
+    });
+    const res = await request(readyApp).get('/ready');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      status: 'ready',
+      checks: { database: { status: 'ok', latencyMs: 7 } },
+    });
+    expect(res.headers['cache-control']).toBe('no-store');
+  });
+
+  it('GET /ready → 503 without leaking database errors', async () => {
+    const unavailableApp = createApp({
+      readinessCheck: async () => {
+        throw new Error('postgresql://secret@private-host/production');
+      },
+    });
+    const res = await request(unavailableApp).get('/ready');
+
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject({
+      status: 'unavailable',
+      checks: { database: { status: 'error' } },
+    });
+    expect(JSON.stringify(res.body)).not.toContain('private-host');
+  });
+
   it('unknown route → 404 error envelope', async () => {
     const res = await request(app).get('/api/does-not-exist');
     expect(res.status).toBe(404);

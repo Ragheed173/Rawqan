@@ -10,6 +10,12 @@ const envSchema = z.object({
     .enum(["development", "test", "production"])
     .default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
+  HEALTH_DATABASE_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(250)
+    .max(30_000)
+    .default(3_000),
   CORS_ORIGINS: z
     .string()
     .default("http://localhost:5173")
