@@ -1,4 +1,5 @@
 import "fake-indexeddb/auto";
+import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -109,7 +110,7 @@ describe("CheckoutPage", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("المبلغ النقدي المستلم")).toHaveValue("15"),
     );
-    fireEvent.click(screen.getByRole("button", { name: "تأكيد الدفع محلياً" }));
+    fireEvent.click(screen.getByRole("button", { name: "تأكيد الدفع وطباعة الإيصال" }));
 
     await waitFor(() => expect(commandMocks.checkout).toHaveBeenCalledOnce());
     expect(commandMocks.reservePrintFrame).toHaveBeenCalledOnce();
@@ -128,5 +129,37 @@ describe("CheckoutPage", () => {
       "INITIAL",
       "80mm",
     );
+  });
+
+  it("shows every order item with quantity and total in the payment layout", async () => {
+    liveState.items = [
+      {
+        id: "item-1",
+        orderId: "order-1",
+        menuItemId: "latte",
+        itemNameSnapshot: "لاتيه روقان",
+        unitPriceMinor: "1500",
+        quantity: 2,
+        lineTotalMinor: "3000",
+        sortOrder: 0,
+      },
+      {
+        id: "item-2",
+        orderId: "order-1",
+        menuItemId: "cake",
+        itemNameSnapshot: "فوندان الشوكولاتة",
+        unitPriceMinor: "14000",
+        quantity: 1,
+        lineTotalMinor: "14000",
+        sortOrder: 1,
+      },
+    ];
+
+    render(checkoutRoute());
+
+    expect(screen.getByRole("heading", { name: "أصناف الطلب" })).toBeInTheDocument();
+    expect(screen.getByText("لاتيه روقان")).toBeInTheDocument();
+    expect(screen.getByText("فوندان الشوكولاتة")).toBeInTheDocument();
+    expect(screen.getByText("3 صنف")).toBeInTheDocument();
   });
 });
