@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { databaseIdentity, parsePostgresUrl } from "../src/ops/databaseBackup.js";
 
-const image = process.env.POSTGRES_TOOLS_IMAGE || "postgres:16-alpine";
+const image = process.env.POSTGRES_TOOLS_IMAGE || "postgres:18-alpine";
 
 export function hasLocalPostgresTool(tool: string) {
   return spawnSync(tool, ["--version"], {

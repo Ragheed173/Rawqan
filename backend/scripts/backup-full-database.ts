@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -39,6 +45,13 @@ mkdirSync(backupDirectory, { recursive: true });
 const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
 const filename = `rawaqan-full-${timestamp}.dump`;
 const localDump = backupPathForTool(backupDirectory, filename, true);
+const manifestPath = `${localDump}.manifest.json`;
+let backupComplete = false;
+process.once("exit", () => {
+  if (backupComplete) return;
+  rmSync(localDump, { force: true });
+  rmSync(manifestPath, { force: true });
+});
 const dumpForPgDump = backupPathForTool(
   backupDirectory,
   filename,
@@ -46,18 +59,25 @@ const dumpForPgDump = backupPathForTool(
 );
 
 console.log("Creating a complete PostgreSQL backup (credentials are not logged)...");
-runPostgresTool(
-  "pg_dump",
-  [
-    "--format=custom",
-    "--compress=9",
-    "--no-owner",
-    "--no-privileges",
-    "--file",
-    dumpForPgDump,
-  ],
-  { databaseUrl, backupDirectory },
-);
+try {
+  runPostgresTool(
+    "pg_dump",
+    [
+      "--format=custom",
+      "--compress=9",
+      "--no-owner",
+      "--no-privileges",
+      "--file",
+      dumpForPgDump,
+    ],
+    { databaseUrl, backupDirectory },
+  );
+} catch (error) {
+  // A failed pg_dump can leave a partial archive. Never leave it looking like
+  // a usable backup; a valid archive is only kept after every check succeeds.
+  rmSync(localDump, { force: true });
+  throw error;
+}
 
 // On Windows the operational fallback is Docker. If pg_dump is installed
 // locally, its output is already at localDump; Docker writes through the mount.
@@ -116,11 +136,11 @@ const manifest = {
   criticalTableCounts: counts,
   gitCommit,
 };
-const manifestPath = `${localDump}.manifest.json`;
 writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, {
   encoding: "utf8",
   flag: "wx",
 });
+backupComplete = true;
 
 console.log(`Backup verified: ${localDump}`);
 console.log(`Manifest written: ${manifestPath}`);

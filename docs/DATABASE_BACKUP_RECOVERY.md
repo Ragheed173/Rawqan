@@ -30,8 +30,9 @@ Remove-Item Env:BACKUP_DATABASE_URL
 $secret = $null
 ```
 
-The command uses installed PostgreSQL 16 tools when available and otherwise
-uses the pinned `postgres:16-alpine` Docker image. Output is written under the
+The command uses installed PostgreSQL tools when available and otherwise uses
+the pinned `postgres:18-alpine` Docker image, matching the production Neon
+PostgreSQL major version verified on 2026-08-29. Output is written under the
 ignored `backups/` directory by default. The manifest contains no password or
 connection URL.
 
@@ -79,3 +80,11 @@ The exercise also found that a brand-new empty database cannot currently run
 were already applied, and a full dump restore does not replay migrations. Fix
 and continuously test fresh-database migration ordering before treating a
 migration-only rebuild as a recovery path.
+
+Later on 2026-08-29 a complete production backup was created with PostgreSQL
+18.6 tools and restored into a disposable PostgreSQL 18 database. Archive and
+SHA-256 checks passed, and the restored counts matched the manifest: 12
+migrations, 13 orders, 13 invoices, 13 payments, 6 cashier shifts, and 126 sync
+operations. The disposable database was removed after verification; the dump
+and manifest remain only in the ignored local backup directory pending transfer
+to encrypted external storage.
