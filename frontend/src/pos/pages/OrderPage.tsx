@@ -303,9 +303,9 @@ export default function OrderPage() {
   });
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_400px]">
-      <section>
-        <div className="mb-4 flex items-center gap-3">
+    <div className="grid min-w-0 gap-5 lg:h-[calc(100dvh-7rem)] lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] lg:overflow-hidden">
+      <section className="min-w-0 lg:flex lg:min-h-0 lg:flex-col">
+        <div className="mb-4 flex min-w-0 shrink-0 items-center gap-3">
           <button
             onClick={() => nav("/pos")}
             className="min-h-12 rounded-xl bg-white px-4"
@@ -320,7 +320,7 @@ export default function OrderPage() {
             className="min-h-12 flex-1 rounded-xl border px-4"
           />
         </div>
-        <div className="mb-4 flex gap-2 overflow-x-auto pb-2">
+        <div className="mb-4 flex shrink-0 gap-2 overflow-x-auto pb-2">
           <button
             onClick={() => setCategoryId("")}
             className={`min-h-11 shrink-0 rounded-full px-4 ${!categoryId ? "bg-amber-500" : "bg-white"}`}
@@ -337,29 +337,31 @@ export default function OrderPage() {
             </button>
           ))}
         </div>
-        {shown.length === 0 && (
-          <p className="rounded-xl bg-white p-5">
-            لا توجد أصناف متاحة تطابق البحث.
-          </p>
-        )}
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-          {shown.map((item) => (
-            <button
-              key={item.id}
-              disabled={Boolean(busyAction) || order?.status !== "OPEN"}
-              onClick={() => beginAdd(item)}
-              className="min-h-28 rounded-2xl bg-white p-4 text-right shadow-sm focus-visible:outline focus-visible:outline-4 focus-visible:outline-amber-300 disabled:opacity-50"
-            >
-              <b>{item.name}</b>
-              <div className="mt-3 text-amber-700">
-                {formatMinor(item.discountPriceMinor ?? item.priceMinor)}
-              </div>
-            </button>
-          ))}
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden pe-1">
+          {shown.length === 0 && (
+            <p className="rounded-xl bg-white p-5">
+              لا توجد أصناف متاحة تطابق البحث.
+            </p>
+          )}
+          <div className="grid min-w-0 grid-cols-2 gap-3 xl:grid-cols-4">
+            {shown.map((item) => (
+              <button
+                key={item.id}
+                disabled={Boolean(busyAction) || order?.status !== "OPEN"}
+                onClick={() => beginAdd(item)}
+                className="min-h-28 min-w-0 rounded-2xl bg-white p-4 text-right shadow-sm focus-visible:outline focus-visible:outline-4 focus-visible:outline-amber-300 disabled:opacity-50"
+              >
+                <b className="break-words">{item.name}</b>
+                <div className="mt-3 break-words text-amber-700">
+                  {formatMinor(item.discountPriceMinor ?? item.priceMinor)}
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       </section>
-      <aside className="rounded-2xl bg-white p-4 shadow-sm">
-        <h2 className="mb-4 text-xl font-bold">
+      <aside className="min-w-0 rounded-2xl bg-white p-4 shadow-sm lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden">
+        <h2 className="mb-4 shrink-0 text-xl font-bold">
           الطلب — {table?.displayName ?? table?.code}
         </h2>
         {error && (
@@ -373,12 +375,12 @@ export default function OrderPage() {
         {items.length === 0 && (
           <p className="rounded-xl bg-slate-50 p-4">لا توجد أصناف في الطلب.</p>
         )}
-        <div className="max-h-[48vh] space-y-2 overflow-auto">
+        <div className="min-h-0 max-h-[48vh] space-y-2 overflow-y-auto overflow-x-hidden lg:max-h-none lg:flex-1">
           {items.map((item) => (
-            <div key={item.id} className="rounded-xl bg-slate-50 p-3">
-              <div className="flex justify-between">
-                <span>{item.itemNameSnapshot}</span>
-                <b>{formatMinor(item.lineTotalMinor)}</b>
+            <div key={item.id} className="min-w-0 rounded-xl bg-slate-50 p-3">
+              <div className="flex min-w-0 justify-between gap-2">
+                <span className="min-w-0 break-words">{item.itemNameSnapshot}</span>
+                <b className="shrink-0">{formatMinor(item.lineTotalMinor)}</b>
               </div>
               {itemModifiers
                 .filter((modifier) => modifier.orderItemId === item.id)
@@ -391,7 +393,7 @@ export default function OrderPage() {
               {item.notes && (
                 <p className="mt-1 text-xs">ملاحظة: {item.notes}</p>
               )}
-              <div className="mt-2 flex items-center gap-2">
+              <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
                 <button
                   disabled={
                     Boolean(busyAction) ||
@@ -465,7 +467,7 @@ export default function OrderPage() {
                       removeLocalOrderItem(order.id, item.id),
                     )
                   }
-                  className="mr-auto h-11 rounded-lg bg-rose-100 px-3 text-rose-700"
+                  className="me-auto h-11 rounded-lg bg-rose-100 px-3 text-rose-700"
                 >
                   حذف
                 </button>
