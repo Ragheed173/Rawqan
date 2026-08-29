@@ -1,0 +1,50 @@
+name: Production readiness
+
+on:
+  schedule:
+    # Twice per hour. This provides outage detection without continuously
+    # keeping the free Render instance awake.
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-readiness
+  cancel-in-progress: true
+
+jobs:
+  readiness:
+    name: API and database readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check production readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl \
+            --silent \
+            --show-error \
+            --fail \
+            --retry 2 \
+            --retry-all-errors \
+            --retry-delay 15 \
+            --connect-timeout 15 \
+            --max-time 90 \
+            https://rawaqan-api.onrender.com/ready)"
+
+          READY_RESPONSE="$response" node <<'NODE'
+          const response = JSON.parse(process.env.READY_RESPONSE ?? "null");
+          if (
+            response?.status !== "ready" ||
+            response?.checks?.database?.status !== "ok"
+          ) {
+            console.error("Production API or database is not ready.");
+            process.exit(1);
+          }
+          console.log(
+            `Production is ready; database latency ${response.checks.database.latencyMs} ms.`,
+          );
+          NODE
