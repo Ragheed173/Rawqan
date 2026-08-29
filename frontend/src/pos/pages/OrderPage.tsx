@@ -360,7 +360,7 @@ export default function OrderPage() {
           </div>
         </div>
       </section>
-      <aside className="min-w-0 rounded-2xl bg-white p-4 shadow-sm lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden">
+      <aside className="order-first min-w-0 rounded-2xl bg-white p-4 shadow-sm lg:order-none lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden">
         <h2 className="mb-4 shrink-0 text-xl font-bold">
           الطلب — {table?.displayName ?? table?.code}
         </h2>
@@ -372,6 +372,49 @@ export default function OrderPage() {
             {error}
           </p>
         )}
+        <div className="mb-4 shrink-0 rounded-xl border border-amber-300 bg-amber-50 p-3 shadow-sm">
+          <div className="flex items-center justify-between text-xl font-bold">
+            <span>الإجمالي</span>
+            <span>{formatMinor(total)}</span>
+          </div>
+          <button
+            disabled={
+              Boolean(busyAction) ||
+              !order ||
+              !items.length ||
+              !["OPEN", "BILL_REQUESTED"].includes(order.status)
+            }
+            onClick={() => void bill("checkout")}
+            className="mt-3 min-h-14 w-full rounded-xl bg-amber-500 px-3 text-lg font-bold disabled:opacity-40"
+          >
+            {order?.status === "BILL_REQUESTED"
+              ? "متابعة الدفع"
+              : "تأكيد الطلب والانتقال للدفع"}
+          </button>
+          <button
+            disabled={
+              Boolean(busyAction) ||
+              !order ||
+              !items.length ||
+              !["OPEN", "BILL_REQUESTED"].includes(order.status)
+            }
+            onClick={() => void bill("split")}
+            className="mt-2 min-h-12 w-full rounded-xl bg-slate-950 font-bold text-white disabled:opacity-40"
+          >
+            تقسيم الفاتورة
+          </button>
+          {order?.status === "BILL_REQUESTED" && (
+            <button
+              disabled={Boolean(busyAction)}
+              onClick={() =>
+                void runItemAction("reopen", () => reopenLocalOrder(order.id))
+              }
+              className="mt-2 min-h-11 w-full rounded-xl border bg-white font-bold disabled:opacity-40"
+            >
+              تعديل الطلب وإضافة أصناف
+            </button>
+          )}
+        </div>
         {items.length === 0 && (
           <p className="rounded-xl bg-slate-50 p-4">لا توجد أصناف في الطلب.</p>
         )}
@@ -474,47 +517,6 @@ export default function OrderPage() {
               </div>
             </div>
           ))}
-        </div>
-        <div className="mt-5 flex justify-between border-t pt-4 text-xl font-bold">
-          <span>الإجمالي</span>
-          <span>{formatMinor(total)}</span>
-        </div>
-        {order?.status === "BILL_REQUESTED" && (
-          <button
-            disabled={Boolean(busyAction)}
-            onClick={() =>
-              void runItemAction("reopen", () => reopenLocalOrder(order.id))
-            }
-            className="mt-4 min-h-12 w-full rounded-xl bg-slate-950 font-bold text-white disabled:opacity-40"
-          >
-            استئناف الطلب وإضافة أصناف
-          </button>
-        )}
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          <button
-            disabled={
-              Boolean(busyAction) ||
-              !order ||
-              !items.length ||
-              order.status !== "OPEN"
-            }
-            onClick={() => void bill("checkout")}
-            className="min-h-14 rounded-xl bg-amber-500 text-lg font-bold disabled:opacity-40"
-          >
-            دفع كامل
-          </button>
-          <button
-            disabled={
-              Boolean(busyAction) ||
-              !order ||
-              !items.length ||
-              order.status !== "OPEN"
-            }
-            onClick={() => void bill("split")}
-            className="min-h-14 rounded-xl bg-slate-950 text-lg font-bold text-white disabled:opacity-40"
-          >
-            تقسيم الفاتورة
-          </button>
         </div>
         <div className="mt-4 grid gap-2 border-t pt-4">
           <div className="flex gap-2">
