@@ -54,14 +54,24 @@ for (const relativePath of overlays) {
 }
 
 const stagedFrontend = join(buildRoot, "frontend");
-const frontendModules = join(repoRoot, "frontend", "node_modules");
-if (!existsSync(frontendModules)) {
+const moduleCandidates = [
+  join(repoRoot, "frontend", "node_modules"),
+  join(repoRoot, "node_modules"),
+];
+const frontendModules = moduleCandidates.find(
+  (candidate) =>
+    existsSync(join(candidate, "vite", "bin", "vite.js")) &&
+    existsSync(join(candidate, "@vitejs", "plugin-react")),
+);
+if (!frontendModules) {
   throw new Error("Frontend dependencies are missing. Run npm.cmd install in the repository first.");
 }
 symlinkSync(frontendModules, join(stagedFrontend, "node_modules"), "junction");
-const tsc = join(repoRoot, "node_modules", "typescript", "bin", "tsc");
+const tsc = moduleCandidates
+  .map((candidate) => join(candidate, "typescript", "bin", "tsc"))
+  .find(existsSync);
 const vite = join(frontendModules, "vite", "bin", "vite.js");
-if (!existsSync(tsc) || !existsSync(vite)) {
+if (!tsc || !existsSync(vite)) {
   throw new Error("Build dependencies are missing. Run npm.cmd install in the repository first.");
 }
 
