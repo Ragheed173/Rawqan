@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   Stethoscope,
   LayoutDashboard,
+  Printer,
 } from "lucide-react";
 import { posDb } from "../db/schema";
 import {
@@ -26,6 +27,7 @@ import { verifyPosStorage } from "../db/diagnostics";
 import { posErrorMessage } from "../errors";
 
 export function PosLayout() {
+  const isDesktop = Boolean(window.rawaqanDesktop?.isDesktop);
   const pending = usePosLive(
     () =>
       posDb.syncOperations
@@ -44,7 +46,7 @@ export function PosLayout() {
   const [diagnostic, setDiagnostic] = useState("");
   const [updateRegistration, setUpdateRegistration] =
     useState<ServiceWorkerRegistration>();
-  const [pwaReady, setPwaReady] = useState(false);
+  const [pwaReady, setPwaReady] = useState(isDesktop);
   const [syncing, setSyncing] = useState(false);
 
   const synchronize = async () => {
@@ -75,6 +77,7 @@ export function PosLayout() {
         .then(async (data) => {
           setOnline(true);
           await applyBootstrap(data as never);
+          if (isDesktop) return;
           const registration = await navigator.serviceWorker?.ready;
           registration?.active?.postMessage({ type: "PRECACHE_POS" });
           window.setTimeout(() => {
@@ -126,7 +129,7 @@ export function PosLayout() {
     void verifyPosStorage().then((health) => {
       if (health.message) setDiagnostic(health.message);
     });
-    if ("serviceWorker" in navigator)
+    if (!isDesktop && "serviceWorker" in navigator)
       void navigator.serviceWorker.ready.then(async (registration) => {
         const ready = await caches.match("/__rawaqan_pos_ready__");
         setPwaReady(Boolean(navigator.serviceWorker.controller && ready));
@@ -182,6 +185,31 @@ export function PosLayout() {
             <LayoutDashboard className="h-4 w-4" />
             لوحة التحكم
           </Link>
+          {isDesktop && (
+            <button
+              type="button"
+              onClick={() => {
+                void window.rawaqanDesktop
+                  ?.configurePrinter()
+                  .then((desktopSettings) =>
+                    setDiagnostic(
+                      desktopSettings.printerName
+                        ? `تم حفظ إعدادات الطابعة: ${desktopSettings.printerName}`
+                        : "لم يتم اختيار طابعة بعد.",
+                    ),
+                  )
+                  .catch(() =>
+                    setDiagnostic(
+                      "تعذر فتح إعدادات الطابعة. تحقق من تعريف الطابعة في Windows.",
+                    ),
+                  );
+              }}
+              className="pos-dashboard-link"
+            >
+              <Printer className="h-4 w-4" />
+              إعداد الطابعة
+            </button>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span

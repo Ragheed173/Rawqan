@@ -1,0 +1,48 @@
+{
+  "name": "@rawaqan/pos-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Rawaqan POS offline-first Windows desktop application",
+  "main": "main.cjs",
+  "scripts": {
+    "prepare:renderer": "node scripts/prepare-renderer.mjs",
+    "start": "npm run prepare:renderer && electron .",
+    "pack:win": "npm run prepare:renderer && electron-builder --win dir --x64",
+    "dist:win": "npm run prepare:renderer && electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "44.0.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.rawaqan.pos",
+    "productName": "Rawaqan POS",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".renderer-build/frontend/dist",
+        "to": "renderer",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": ["nsis"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Rawaqan POS",
+      "artifactName": "Rawaqan-POS-Setup-${version}-${arch}.${ext}"
+    }
+  }
+}

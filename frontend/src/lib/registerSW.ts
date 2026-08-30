@@ -4,7 +4,10 @@ export function shouldAutoActivateServiceWorker(pathname: string) {
 }
 
 export function registerServiceWorker() {
-  if (import.meta.env.DEV || !('serviceWorker' in navigator)) return;
+  // The desktop package already ships the complete renderer locally. Keeping a
+  // browser service worker there could serve assets from an older installer,
+  // so Electron deliberately relies on the bundled files instead.
+  if (window.rawaqanDesktop?.isDesktop || import.meta.env.DEV || !('serviceWorker' in navigator)) return;
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then((registration) => {
       let activating = false;

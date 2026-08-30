@@ -1,10 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  BrowserReceiptPrinter,
   calculateReceiptDocumentHeightPx,
   calculateReceiptPageHeightMm,
   renderReceiptHtml,
   type ReceiptData,
 } from "./ReceiptPrinter";
+
+afterEach(() => {
+  delete window.rawaqanDesktop;
+});
 
 function fixture(): ReceiptData {
   const invoice = {
@@ -120,5 +125,38 @@ describe("receipt renderer", () => {
   it("uses the tallest rendered document measurement", () => {
     expect(calculateReceiptDocumentHeightPx(220, 225.4, 240, 238)).toBe(240);
     expect(calculateReceiptDocumentHeightPx(Number.NaN, -5)).toBe(0);
+  });
+
+  it("uses the native desktop bridge without opening the browser print dialog", async () => {
+    const printReceipt = vi.fn().mockResolvedValue({
+      ok: true,
+      alreadyPrinted: false,
+      printerName: "Thermal-80mm",
+    });
+    window.rawaqanDesktop = {
+      isDesktop: true,
+      getSettings: vi.fn().mockResolvedValue({
+        printerName: "Thermal-80mm",
+        paperProfile: "80mm",
+        autoPrint: true,
+        launchAtLogin: true,
+        kioskMode: true,
+      }),
+      configurePrinter: vi.fn(),
+      printReceipt,
+    };
+
+    await new BrowserReceiptPrinter().print(fixture(), "80mm");
+
+    expect(printReceipt).toHaveBeenCalledOnce();
+    expect(printReceipt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profile: "80mm",
+        jobId: "invoice-1:INITIAL",
+        isReprint: true,
+        automatic: false,
+        html: expect.stringContaining("INV-2026-0001"),
+      }),
+    );
   });
 });

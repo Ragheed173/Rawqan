@@ -155,6 +155,19 @@ export class BrowserReceiptPrinter implements ReceiptPrinter {
     profile: "80mm" | "58mm" = "80mm",
     reservedTarget?: Window | HTMLIFrameElement,
   ) {
+    if (window.rawaqanDesktop?.isDesktop) {
+      this.releasePrintTarget(reservedTarget);
+      const desktopSettings = await window.rawaqanDesktop.getSettings();
+      const desktopProfile = desktopSettings.paperProfile ?? profile;
+      await window.rawaqanDesktop.printReceipt({
+        html: renderReceiptHtml(data, desktopProfile),
+        profile: desktopProfile,
+        jobId: `${data.invoice.id}:INITIAL`,
+        isReprint: Boolean(data.isReprint),
+        automatic: Boolean(reservedTarget),
+      });
+      return;
+    }
     const target = reservedTarget ?? this.reservePrintWindow();
     const isFrame = target instanceof HTMLIFrameElement;
     const popup = isFrame ? target.contentWindow : target;

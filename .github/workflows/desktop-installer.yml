@@ -1,0 +1,46 @@
+name: Build POS desktop installer
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pos-desktop-installer
+  cancel-in-progress: true
+
+jobs:
+  windows-installer:
+    name: Windows x64 installer
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install application dependencies
+        run: npm ci
+
+      - name: Install desktop build dependencies
+        run: npm ci --prefix desktop
+
+      - name: Run receipt and checkout tests
+        run: npm run test --workspace frontend -- src/pos/printing/ReceiptPrinter.test.ts src/pos/pages/CheckoutPage.test.tsx
+
+      - name: Build signed-ready NSIS installer
+        run: npm run dist:win --prefix desktop
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: Rawaqan-POS-Windows-x64
+          path: desktop/release/*.exe
+          if-no-files-found: error
+          retention-days: 14
