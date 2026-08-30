@@ -2,6 +2,7 @@ import axios from "axios";
 import type { ApiErrorBody } from "@/lib/apiClient";
 
 export const POS_ERROR_MESSAGES: Record<string, string> = {
+  UNAUTHORIZED: "انتهت جلسة الخادم. سجّل الدخول مجدداً؛ العمليات محفوظة وستُزامن بعد الدخول.",
   TABLE_OCCUPIED: "الطاولة مشغولة. اختر طاولة متاحة أو افتح طلبها الحالي.",
   TABLE_DISABLED: "الطاولة معطلة. اختر طاولة نشطة أو اطلب من المدير تفعيلها.",
   ORDER_NOT_FOUND: "الطلب غير موجود محلياً أو على الخادم. حدّث البيانات وتحقق من الطاولة.",

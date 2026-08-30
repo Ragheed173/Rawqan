@@ -40,6 +40,11 @@ api.interceptors.request.use((cfg: InternalAxiosRequestConfig) => {
 // ─── Silent refresh on 401 ───────────────────────────────────
 let refreshing: Promise<string | null> | null = null;
 
+function notifyAuthenticationRequired() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('rawaqan-auth-required'));
+}
+
 async function requestRefresh(): Promise<string | null> {
   try {
     const res = await axios.post<{ success: true; data: { accessToken: string } }>(
@@ -72,6 +77,7 @@ api.interceptors.response.use(
         original.headers.set('Authorization', `Bearer ${token}`);
         return api(original);
       }
+      notifyAuthenticationRequired();
     }
     return Promise.reject(error);
   },

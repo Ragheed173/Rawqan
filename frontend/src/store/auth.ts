@@ -8,6 +8,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   restore: () => Promise<void>;
+  expire: () => void;
 }
 
 /** Global admin auth state. Access token lives in apiClient's in-memory store. */
@@ -30,4 +31,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     const admin = await authService.restore();
     set({ admin, status: admin ? 'authenticated' : 'unauthenticated' });
   },
+
+  expire: () => set({ admin: null, status: 'unauthenticated' }),
 }));

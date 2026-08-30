@@ -55,11 +55,14 @@ async function runSync(options: RunSyncOptions = {}) {
   const due = await posDb.syncOperations
     .where("status")
     .anyOf("PENDING", "FAILED")
-    .filter(
-      (operation) =>
+    .filter((operation) => {
+      if (!options.retryFailed && operation.errorCode === "UNAUTHORIZED")
+        return false;
+      return (
         !operation.nextAttemptAt ||
-        operation.nextAttemptAt <= new Date().toISOString(),
-    )
+        operation.nextAttemptAt <= new Date().toISOString()
+      );
+    })
     .sortBy("createdAt");
   for (const operation of orderDueOperations(due)) {
     await posDb.syncOperations.update(operation.operationId, {

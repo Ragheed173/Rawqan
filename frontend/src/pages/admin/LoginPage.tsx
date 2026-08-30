@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Loader2, Lock, Mail } from 'lucide-react';
 import { toast } from 'sonner';
@@ -22,7 +22,16 @@ type FormValues = z.infer<typeof schema>;
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, status } = useAuthStore();
+  const locationState = location.state as { from?: unknown; reason?: unknown } | null;
+  const requestedPath =
+    typeof locationState?.from === 'string' &&
+    locationState.from.startsWith('/') &&
+    !locationState.from.startsWith('//')
+      ? locationState.from
+      : '/admin';
+  const sessionExpired = locationState?.reason === 'session-expired';
 
   const {
     register,
@@ -31,14 +40,14 @@ export default function LoginPage() {
   } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
   useEffect(() => {
-    if (status === 'authenticated') navigate('/admin', { replace: true });
-  }, [status, navigate]);
+    if (status === 'authenticated') navigate(requestedPath, { replace: true });
+  }, [status, navigate, requestedPath]);
 
   const onSubmit = async (values: FormValues) => {
     try {
       await login(values.email, values.password);
       toast.success('مرحباً بعودتك');
-      navigate('/admin', { replace: true });
+      navigate(requestedPath, { replace: true });
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'فشل تسجيل الدخول'));
     }
@@ -58,6 +67,12 @@ export default function LoginPage() {
             <Logo className="text-3xl text-white" />
             <p className="mt-2 text-sm text-white/50">لوحة إدارة المطعم</p>
           </div>
+
+          {sessionExpired && (
+            <div role="alert" className="mb-5 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm leading-6 text-amber-100">
+              انتهت جلسة الخادم. سجّل الدخول مجدداً؛ ستعود إلى نقطة البيع وتُستأنف مزامنة العمليات المحفوظة تلقائياً.
+            </div>
+          )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
             <div className="space-y-2">

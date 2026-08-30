@@ -32,6 +32,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 export function PosLayout() {
   const navigate = useNavigate();
   const logout = useAuthStore((state) => state.logout);
+  const expireAuthentication = useAuthStore((state) => state.expire);
   const { can } = usePermissions();
   const isDesktop = Boolean(window.rawaqanDesktop?.isDesktop);
   const pending = usePosLive(
@@ -105,6 +106,7 @@ export function PosLayout() {
         .then(async (data) => {
           setOnline(true);
           await applyBootstrap(data as never);
+          await syncNow({ retryFailed: true });
           if (isDesktop) return;
           const registration = await navigator.serviceWorker?.ready;
           registration?.active?.postMessage({ type: "PRECACHE_POS" });
@@ -148,12 +150,20 @@ export function PosLayout() {
       setUpdateRegistration(
         (event as CustomEvent<ServiceWorkerRegistration>).detail,
       );
+    const authenticationRequired = () => {
+      expireAuthentication();
+      navigate("/admin/login", {
+        replace: true,
+        state: { from: window.location.pathname, reason: "session-expired" },
+      });
+    };
     window.addEventListener("online", updateOnline);
     window.addEventListener("offline", updateOnline);
     window.addEventListener("rawaqan-pos-connectivity", backendConnectivity);
     window.addEventListener("rawaqan-pos-storage-blocked", storageBlocked);
     window.addEventListener("unhandledrejection", storageFailure);
     window.addEventListener("rawaqan-sw-update", swUpdate);
+    window.addEventListener("rawaqan-auth-required", authenticationRequired);
     void verifyPosStorage().then((health) => {
       if (health.message) setDiagnostic(health.message);
     });
@@ -174,8 +184,9 @@ export function PosLayout() {
       window.removeEventListener("rawaqan-pos-storage-blocked", storageBlocked);
       window.removeEventListener("unhandledrejection", storageFailure);
       window.removeEventListener("rawaqan-sw-update", swUpdate);
+      window.removeEventListener("rawaqan-auth-required", authenticationRequired);
     };
-  }, []);
+  }, [expireAuthentication, isDesktop, navigate]);
 
   const activateUpdate = () => {
     if (pending > 0) {

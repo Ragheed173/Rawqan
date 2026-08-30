@@ -96,8 +96,9 @@ describe("receipt renderer", () => {
       expect(html).toContain(`@page{size:${profile} auto;margin:0}`);
       expect(html).toContain(`width:${profile}`);
       expect(html).toContain(
-        `width:${profile === "58mm" ? "48mm" : "72mm"}`,
+        `width:${profile === "58mm" ? "46mm" : "68mm"}`,
       );
+      expect(html).toContain("margin:0 auto 0 2mm");
       expect(html).toContain('id="receipt-page-size"');
       expect(html).toContain('dir="rtl"');
       expect(html).toContain("unicode-bidi:embed");
