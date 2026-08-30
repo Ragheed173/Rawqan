@@ -1,4 +1,4 @@
-import { Link, Outlet, NavLink } from "react-router-dom";
+import { Link, Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import {
   Wifi,
@@ -12,6 +12,7 @@ import {
   Stethoscope,
   LayoutDashboard,
   Printer,
+  LogOut,
 } from "lucide-react";
 import { posDb } from "../db/schema";
 import {
@@ -25,8 +26,13 @@ import { cn } from "@/lib/utils";
 import { api, unwrap } from "@/lib/apiClient";
 import { verifyPosStorage } from "../db/diagnostics";
 import { posErrorMessage } from "../errors";
+import { useAuthStore } from "@/store/auth";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export function PosLayout() {
+  const navigate = useNavigate();
+  const logout = useAuthStore((state) => state.logout);
+  const { can } = usePermissions();
   const isDesktop = Boolean(window.rawaqanDesktop?.isDesktop);
   const pending = usePosLive(
     () =>
@@ -48,6 +54,28 @@ export function PosLayout() {
     useState<ServiceWorkerRegistration>();
   const [pwaReady, setPwaReady] = useState(isDesktop);
   const [syncing, setSyncing] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    const message = pending
+      ? `يوجد ${pending} عملية محفوظة بانتظار المزامنة. ستبقى محفوظة بعد تسجيل الخروج. هل تريد المتابعة؟`
+      : "هل تريد تسجيل الخروج من نقطة البيع؟";
+    if (!window.confirm(message)) return;
+    setLoggingOut(true);
+    try {
+      await logout();
+      await posDb.offlineSession.toCollection().modify((session) => {
+        delete session.unlockedAt;
+      });
+      if (window.rawaqanDesktop?.isDesktop) {
+        await window.rawaqanDesktop.clearSession();
+      }
+      navigate("/admin/login", { replace: true });
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   const synchronize = async () => {
     if (syncing) return;
@@ -181,10 +209,12 @@ export function PosLayout() {
       <header className="pos-header sticky top-0 z-40 flex min-h-16 flex-wrap items-center justify-between gap-3 px-4 py-2.5">
         <div className="flex items-center gap-3">
           <div className="text-xl font-bold">روقان POS</div>
-          <Link to="/admin" className="pos-dashboard-link">
-            <LayoutDashboard className="h-4 w-4" />
-            لوحة التحكم
-          </Link>
+          {can("menu:read") && (
+            <Link to="/admin" className="pos-dashboard-link">
+              <LayoutDashboard className="h-4 w-4" />
+              لوحة التحكم
+            </Link>
+          )}
           {isDesktop && (
             <button
               type="button"
@@ -210,6 +240,15 @@ export function PosLayout() {
               إعداد الطابعة
             </button>
           )}
+          <button
+            type="button"
+            disabled={loggingOut}
+            onClick={() => void handleLogout()}
+            className="pos-dashboard-link disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <LogOut className="h-4 w-4" />
+            {loggingOut ? "جارٍ الخروج…" : "تسجيل الخروج"}
+          </button>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span

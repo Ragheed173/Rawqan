@@ -3,7 +3,6 @@ interface RawaqanDesktopSettings {
   paperProfile: "80mm" | "58mm";
   autoPrint: boolean;
   launchAtLogin: boolean;
-  kioskMode: boolean;
 }
 
 interface RawaqanDesktopPrintJob {
@@ -18,6 +17,7 @@ interface RawaqanDesktopBridge {
   readonly isDesktop: true;
   getSettings(): Promise<RawaqanDesktopSettings>;
   configurePrinter(): Promise<RawaqanDesktopSettings & { printers?: unknown[] }>;
+  clearSession(): Promise<{ ok: boolean }>;
   printReceipt(job: RawaqanDesktopPrintJob): Promise<{
     ok: boolean;
     alreadyPrinted: boolean;

@@ -122,6 +122,12 @@ function storeRefreshCookie(setCookie) {
   writeFileSync(userFile("refresh-cookie.bin"), safeStorage.encryptString(value));
 }
 
+function clearRefreshCookie() {
+  try {
+    writeFileSync(userFile("refresh-cookie.bin"), Buffer.alloc(0));
+  } catch {}
+}
+
 async function proxyApi(request, url) {
   const target = `${API_ORIGIN}${url.pathname}${url.search}`;
   const headers = new Headers(request.headers);
@@ -420,6 +426,10 @@ else {
     ipcMain.handle("rawaqan:get-settings", async () => ({ ...settings }));
     ipcMain.handle("rawaqan:configure-printer", configurePrinter);
     ipcMain.handle("rawaqan:print-receipt", (_event, job) => printHtml(job || {}));
+    ipcMain.handle("rawaqan:clear-session", async () => {
+      clearRefreshCookie();
+      return { ok: true };
+    });
 
     createWindow();
     app.on("activate", () => {

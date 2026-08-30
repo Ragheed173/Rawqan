@@ -41,6 +41,7 @@ run("tar", ["-xf", archivePath, "-C", buildRoot]);
 // committed Rawaqan application rather than another local experiment.
 const overlays = [
   "frontend/src/layouts/AdminLayout.tsx",
+  "frontend/src/services/admin/auth.service.ts",
   "frontend/src/pos/components/PosLayout.tsx",
   "frontend/src/pos/printing/ReceiptPrinter.ts",
   "frontend/src/lib/registerSW.ts",

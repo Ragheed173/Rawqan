@@ -140,9 +140,9 @@ describe("receipt renderer", () => {
         paperProfile: "80mm",
         autoPrint: true,
         launchAtLogin: true,
-        kioskMode: true,
       }),
       configurePrinter: vi.fn(),
+      clearSession: vi.fn(),
       printReceipt,
     };
 

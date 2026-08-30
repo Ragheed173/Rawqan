@@ -28,6 +28,8 @@ export const authService = {
   async logout(): Promise<void> {
     try {
       await api.post('/auth/logout');
+    } catch {
+      // Local logout must remain available when the cashier is offline.
     } finally {
       tokenStore.set(null);
     }
