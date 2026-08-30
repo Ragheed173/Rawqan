@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import QRCode from 'qrcode';
 import PDFDocument from 'pdfkit';
-import { requireAuth } from '../../middleware/auth.js';
+import { requireAuth, requirePermission } from '../../middleware/auth.js';
 import { validate } from '../../middleware/validate.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { env } from '../../config/env.js';
@@ -84,5 +84,5 @@ publicQrRouter.get('/', validate({ query: qrQuery }), asyncHandler((req, res) =>
 
 // Admin (mounted at /api/admin/qr) — full control incl. printable table cards
 export const adminQrRouter = Router();
-adminQrRouter.use(requireAuth);
+adminQrRouter.use(requireAuth, requirePermission('menu:read'));
 adminQrRouter.get('/', validate({ query: qrQuery }), asyncHandler((req, res) => renderQr(req, res, true)));

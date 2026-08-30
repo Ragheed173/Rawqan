@@ -11,7 +11,7 @@ publicSettingsRouter.get('/', asyncHandler(controller.get));
 
 // Admin (mounted at /api/admin/settings)
 export const adminSettingsRouter = Router();
-adminSettingsRouter.use(requireAuth);
+adminSettingsRouter.use(requireAuth, requirePermission('settings:write'));
 adminSettingsRouter.get('/', asyncHandler(controller.get));
 adminSettingsRouter.patch(
   '/',

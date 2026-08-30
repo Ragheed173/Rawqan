@@ -467,7 +467,7 @@ adminPosRouter.get(
 );
 adminPosRouter.get(
   "/reservations",
-  requirePermission("pos:reservation:manage"),
+  requirePermission("pos:reports:read"),
   validate({ query: schemas.reservationsQuery }),
   asyncHandler(async (req, res) =>
     sendPosSuccess(res, await queries.listReservations(req.query as never)),

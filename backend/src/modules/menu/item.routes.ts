@@ -18,7 +18,7 @@ publicItemRouter.get('/:slug', validate({ params: slugParamSchema }), asyncHandl
 
 // Admin (mounted at /api/admin/items)
 export const adminItemRouter = Router();
-adminItemRouter.use(requireAuth);
+adminItemRouter.use(requireAuth, requirePermission('menu:read'));
 adminItemRouter.get('/', validate({ query: listItemsQuerySchema }), asyncHandler(controller.listAdmin));
 adminItemRouter.post(
   '/',

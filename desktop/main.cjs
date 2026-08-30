@@ -64,7 +64,6 @@ function loadSettings() {
     paperProfile: saved.paperProfile === "58mm" ? "58mm" : "80mm",
     autoPrint: saved.autoPrint !== false,
     launchAtLogin: saved.launchAtLogin !== false,
-    kioskMode: saved.kioskMode !== false,
   };
 }
 
@@ -72,9 +71,6 @@ function saveSettings() {
   writeJsonAtomic("settings.json", settings);
   if (app.isPackaged) {
     app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin });
-  }
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.setFullScreen(settings.kioskMode);
   }
 }
 
@@ -359,15 +355,6 @@ async function configurePrinter() {
           saveSettings();
         },
       },
-      {
-        label: "وضع ملء الشاشة للكاشير",
-        type: "checkbox",
-        checked: settings.kioskMode,
-        click: (item) => {
-          settings.kioskMode = item.checked;
-          saveSettings();
-        },
-      },
     ];
     Menu.buildFromTemplate(template).popup({ window: mainWindow, callback: resolveMenu });
   });
@@ -376,14 +363,17 @@ async function configurePrinter() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
+    title: "Rawaqan POS",
     width: 1440,
     height: 900,
     minWidth: 1024,
     minHeight: 700,
     show: false,
+    frame: true,
+    fullscreen: false,
+    skipTaskbar: false,
     backgroundColor: "#f8f5ef",
     autoHideMenuBar: true,
-    fullscreen: settings.kioskMode,
     webPreferences: {
       preload: join(__dirname, "preload.cjs"),
       nodeIntegration: false,
@@ -404,7 +394,10 @@ function createWindow() {
       if (url.startsWith("https://") || url.startsWith("http://")) void shell.openExternal(url);
     }
   });
-  mainWindow.once("ready-to-show", () => mainWindow.show());
+  mainWindow.once("ready-to-show", () => {
+    mainWindow.maximize();
+    mainWindow.show();
+  });
   void mainWindow.loadURL(APP_URL);
 }
 

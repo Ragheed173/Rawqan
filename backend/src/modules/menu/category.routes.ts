@@ -16,7 +16,7 @@ publicCategoryRouter.get('/', asyncHandler(controller.listPublic));
 
 // Admin routes (mounted at /api/admin/categories, all behind requireAuth)
 export const adminCategoryRouter = Router();
-adminCategoryRouter.use(requireAuth);
+adminCategoryRouter.use(requireAuth, requirePermission('menu:read'));
 adminCategoryRouter.get('/', asyncHandler(controller.listAdmin));
 adminCategoryRouter.post(
   '/',

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   Link,
+  Navigate,
   NavLink,
   Outlet,
   useLocation,
@@ -21,13 +22,14 @@ import {
   ScrollText,
   Users,
   MonitorSmartphone,
+  ShoppingCart,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Logo } from "@/components/shared/Logo";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import type { Permission } from "@/types";
+import type { AdminRole, Permission } from "@/types";
 
 interface NavItem {
   to: string;
@@ -39,16 +41,16 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { to: "/admin", label: "لوحة التحكم", icon: LayoutDashboard, end: true },
-  { to: "/admin/categories", label: "الأقسام", icon: FolderTree },
-  { to: "/admin/meals", label: "الوجبات", icon: UtensilsCrossed },
+  { to: "/admin", label: "لوحة التحكم", icon: LayoutDashboard, end: true, perm: "menu:read" },
+  { to: "/admin/categories", label: "الأقسام", icon: FolderTree, perm: "menu:read" },
+  { to: "/admin/meals", label: "الوجبات", icon: UtensilsCrossed, perm: "menu:read" },
   {
     to: "/admin/analytics",
     label: "التحليلات",
     icon: BarChart3,
     perm: "analytics:read",
   },
-  { to: "/admin/qr", label: "رمز QR", icon: QrCode },
+  { to: "/admin/qr", label: "رمز QR", icon: QrCode, perm: "menu:read" },
   {
     to: "/admin/data",
     label: "البيانات",
@@ -76,16 +78,52 @@ const NAV: NavItem[] = [
   },
 ];
 
+const ADMIN_ROUTE_RULES: Array<{
+  matches: (pathname: string) => boolean;
+  anyOf: Permission[];
+}> = [
+  { matches: (path) => path === "/admin", anyOf: ["menu:read"] },
+  { matches: (path) => path.startsWith("/admin/categories"), anyOf: ["menu:read"] },
+  { matches: (path) => path.startsWith("/admin/meals"), anyOf: ["menu:read"] },
+  { matches: (path) => path.startsWith("/admin/analytics"), anyOf: ["analytics:read"] },
+  { matches: (path) => path.startsWith("/admin/qr"), anyOf: ["menu:read"] },
+  { matches: (path) => path.startsWith("/admin/data"), anyOf: ["import:manage", "backup:manage"] },
+  { matches: (path) => path.startsWith("/admin/logs"), anyOf: ["logs:read"] },
+  { matches: (path) => path.startsWith("/admin/admins"), anyOf: ["admin:manage"] },
+  { matches: (path) => path === "/admin/pos", anyOf: ["pos:table:configure", "pos:reports:read", "pos:device:manage", "pos:audit:read"] },
+  { matches: (path) => path.startsWith("/admin/pos/tables"), anyOf: ["pos:table:configure"] },
+  { matches: (path) => path.startsWith("/admin/pos/reports"), anyOf: ["pos:reports:read"] },
+  { matches: (path) => path.startsWith("/admin/pos/devices"), anyOf: ["pos:device:manage"] },
+  { matches: (path) => path.startsWith("/admin/pos/audit"), anyOf: ["pos:audit:read"] },
+  { matches: (path) => path.startsWith("/admin/pos/invoices"), anyOf: ["pos:reports:read"] },
+  { matches: (path) => path.startsWith("/admin/pos/reservations"), anyOf: ["pos:reservation:manage"] },
+  { matches: (path) => path.startsWith("/admin/settings"), anyOf: ["settings:write"] },
+];
+
+export function canAccessAdminPath(
+  pathname: string,
+  permissions: readonly Permission[],
+  role?: AdminRole,
+) {
+  if (role === "CASHIER") return false;
+  const rule = ADMIN_ROUTE_RULES.find(({ matches }) => matches(pathname));
+  return !!rule && rule.anyOf.some((permission) => permissions.includes(permission));
+}
+
 /** Admin shell: dark sidebar (collapsible on mobile) + content area. */
 export function AdminLayout() {
   const { admin, logout } = useAuthStore();
-  const { can, canAny } = usePermissions();
+  const { role, permissions, can, canAny } = usePermissions();
   const navigate = useNavigate();
   const location = useLocation();
   const isPosAdmin =
     location.pathname === "/admin/pos" ||
     location.pathname.startsWith("/admin/pos/");
   const [open, setOpen] = useState(false);
+
+  if (!canAccessAdminPath(location.pathname, permissions, role)) {
+    return <Navigate to={can("pos:operate") ? "/pos" : "/admin/login"} replace />;
+  }
 
   const nav = NAV.filter(
     (item) =>
@@ -106,6 +144,15 @@ export function AdminLayout() {
         <span className="text-xs text-white/40">لوحة الإدارة</span>
       </div>
       <nav className="flex-1 space-y-1 p-4">
+        {can("pos:operate") && (
+          <Link
+            to="/pos"
+            onClick={() => setOpen(false)}
+            className="mb-3 flex items-center gap-3 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-500"
+          >
+            <ShoppingCart className="h-5 w-5" /> فتح نقطة البيع POS
+          </Link>
+        )}
         {nav.map((item) => (
           <NavLink
             key={item.to}

@@ -32,7 +32,7 @@ publicTagRouter.get(
 
 // Admin CRUD (mounted at /api/admin/tags)
 export const adminTagRouter = Router();
-adminTagRouter.use(requireAuth);
+adminTagRouter.use(requireAuth, requirePermission("menu:read"));
 adminTagRouter.get(
   "/",
   asyncHandler(async (_req, res) => {
