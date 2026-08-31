@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { assertSyncOperationPermission } from "../src/modules/pos/sync.service.js";
+import {
+  assertSyncOperationPermission,
+  canRecoverMissingSyncDependencies,
+} from "../src/modules/pos/sync.service.js";
 
 describe("offline sync authorization", () => {
+  it("recovers only cancellation from a missing historical dependency", () => {
+    expect(canRecoverMissingSyncDependencies("CANCEL_ORDER")).toBe(true);
+    expect(canRecoverMissingSyncDependencies("FINALIZE_INVOICE")).toBe(false);
+    expect(canRecoverMissingSyncDependencies("OPEN_ORDER")).toBe(false);
+  });
+
   it("allows cashier operational replay", () => {
     expect(() => assertSyncOperationPermission("CASHIER", "OPEN_ORDER")).not.toThrow();
     expect(() => assertSyncOperationPermission("CASHIER", "CANCEL_ORDER")).not.toThrow();

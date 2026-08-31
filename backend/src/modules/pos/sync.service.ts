@@ -33,6 +33,10 @@ export function assertSyncOperationPermission(role: AdminRole, operationType: st
   posAssert(!required || roleHas(role, required), "PERMISSION_DENIED", `Permission ${required} is required for ${operationType}`);
 }
 
+export function canRecoverMissingSyncDependencies(operationType: string) {
+  return operationType === "CANCEL_ORDER";
+}
+
 function isLocalSequenceUniqueConflict(error: unknown) {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") return false;
   const target = Array.isArray(error.meta?.target)
@@ -127,7 +131,7 @@ export async function pushOperations(actorId: string, deviceId: string, operatio
     // lets an old desktop queue recover when a historical sync-operation row
     // was pruned or lost, while the command still enforces exact version,
     // state, billing and table-assignment invariants transactionally.
-    const canRecoverMissingDependencies = operation.operationType === "CANCEL_ORDER";
+    const canRecoverMissingDependencies = canRecoverMissingSyncDependencies(operation.operationType);
     posAssert(
       succeededDependencies === operation.dependencies.length || canRecoverMissingDependencies,
       "SYNC_DEPENDENCY_MISSING",
