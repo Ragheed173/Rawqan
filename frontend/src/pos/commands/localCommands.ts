@@ -64,6 +64,41 @@ export async function reopenLocalOrder(orderId: string) {
   });
 }
 
+export async function cancelLocalOrder(orderId: string) {
+  const order = await posDb.orders.get(orderId);
+  if (!order) throw new Error("ORDER_NOT_FOUND");
+  const payload = { id: orderId, expectedVersion: order.version };
+  return localOperation(
+    "CANCEL_ORDER",
+    payload,
+    [posDb.orders, posDb.orderTables, posDb.restaurantTables],
+    async () => {
+      const current = await posDb.orders.get(orderId);
+      if (!current || !["OPEN", "BILL_REQUESTED"].includes(current.status))
+        throw new Error("INVALID_ORDER_STATE");
+      const now = new Date().toISOString();
+      const assignments = await posDb.orderTables
+        .where("orderId")
+        .equals(orderId)
+        .filter((row) => !row.releasedAt)
+        .toArray();
+      for (const assignment of assignments) {
+        await posDb.orderTables.update(assignment.id, { releasedAt: now });
+        await posDb.restaurantTables.update(assignment.tableId, {
+          status: "AVAILABLE",
+          currentOrderId: null,
+        });
+      }
+      await posDb.orders.update(orderId, {
+        status: "CANCELLED",
+        version: current.version + 1,
+        closedAt: now,
+      });
+      return orderId;
+    },
+  );
+}
+
 export async function updateLocalOrderItem(orderId: string, itemId: string, quantity: number, notes?: string | null) {
   const order = await posDb.orders.get(orderId); const item = await posDb.orderItems.get(itemId); if (!order || !item) throw new Error("ORDER_NOT_FOUND");
   const payload = { orderId, itemId, expectedVersion: order.version, quantity, notes };

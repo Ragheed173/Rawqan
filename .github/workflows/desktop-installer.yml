@@ -7,10 +7,7 @@ on:
     paths:
       - ".github/workflows/desktop-installer.yml"
       - "desktop/**"
-      - "frontend/src/lib/registerSW.ts"
-      - "frontend/src/pos/components/PosLayout.tsx"
-      - "frontend/src/pos/printing/**"
-      - "frontend/src/types/desktop.d.ts"
+      - "frontend/**"
 
 permissions:
   contents: read

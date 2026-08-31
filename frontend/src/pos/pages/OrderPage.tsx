@@ -4,6 +4,7 @@ import { posDb, type LocalMenuItem } from "../db/schema";
 import { usePosLive } from "../hooks/usePosLive";
 import {
   addLocalOrderItem,
+  cancelLocalOrder,
   mergeLocalOrders,
   removeLocalOrderItem,
   requestLocalBill,
@@ -217,6 +218,30 @@ export default function OrderPage() {
       nav(`/pos/${path}/${order.id}`);
     } catch (cause) {
       setError(posErrorMessage(cause));
+    } finally {
+      setBusyAction("");
+    }
+  };
+  const cancelOrder = async () => {
+    if (
+      !order ||
+      busyAction ||
+      !["OPEN", "BILL_REQUESTED"].includes(order.status)
+    )
+      return;
+    if (
+      !confirm(
+        `إلغاء الطلب نهائياً؟\nالطاولة: ${table?.displayName ?? table?.code}\nعدد الأصناف: ${items.length}\nالإجمالي: ${formatMinor(total)}\nستصبح الطاولة متاحة، ولا يمكن التراجع عن الإلغاء.`,
+      )
+    )
+      return;
+    setBusyAction("cancel-order");
+    setError("");
+    try {
+      await cancelLocalOrder(order.id);
+      nav("/pos");
+    } catch (cause) {
+      setError(posErrorMessage(cause, "تعذر إلغاء الطلب."));
     } finally {
       setBusyAction("");
     }
@@ -483,26 +508,6 @@ export default function OrderPage() {
                   disabled={
                     Boolean(busyAction) || !order || order.status !== "OPEN"
                   }
-                  onClick={() => {
-                    const notes = prompt("ملاحظة الصنف", item.notes ?? "");
-                    if (notes !== null && order)
-                      void runItemAction(`notes:${item.id}`, () =>
-                        updateLocalOrderItem(
-                          order.id,
-                          item.id,
-                          item.quantity,
-                          notes,
-                        ),
-                      );
-                  }}
-                  className="h-11 rounded-lg bg-white px-3"
-                >
-                  ملاحظة
-                </button>
-                <button
-                  disabled={
-                    Boolean(busyAction) || !order || order.status !== "OPEN"
-                  }
                   onClick={() =>
                     order &&
                     confirm(`حذف ${item.itemNameSnapshot}؟`) &&
@@ -567,6 +572,19 @@ export default function OrderPage() {
               دمج
             </button>
           </div>
+          <button
+            disabled={
+              Boolean(busyAction) ||
+              !order ||
+              !["OPEN", "BILL_REQUESTED"].includes(order.status)
+            }
+            onClick={() => void cancelOrder()}
+            className="min-h-12 w-full rounded-xl border border-rose-300 bg-rose-50 px-3 font-bold text-rose-700 disabled:opacity-40"
+          >
+            {busyAction === "cancel-order"
+              ? "جارٍ إلغاء الطلب…"
+              : "إلغاء الطلبية"}
+          </button>
         </div>
       </aside>
       {pendingItem && (

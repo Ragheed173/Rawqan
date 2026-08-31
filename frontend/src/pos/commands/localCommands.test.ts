@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PosDatabase, posDb } from "../db/schema";
 import {
   addLocalOrderItem,
+  cancelLocalOrder,
   checkoutLocal,
   createLocalReservation,
   finalizeLocalEqualSplit,
@@ -43,6 +44,31 @@ beforeEach(async () => {
 });
 
 describe("local-first POS commands", () => {
+  it("cancels an order offline and releases its table", async () => {
+    const { result: orderId } = await openLocalOrder({
+      tableId: "22222222-2222-4222-8222-222222222222",
+      userId: "cashier",
+      businessDate: "2026-08-25",
+    });
+
+    await cancelLocalOrder(orderId);
+
+    expect(await posDb.orders.get(orderId)).toMatchObject({
+      status: "CANCELLED",
+      version: 2,
+      closedAt: expect.any(String),
+    });
+    expect(
+      await posDb.restaurantTables.get(
+        "22222222-2222-4222-8222-222222222222",
+      ),
+    ).toMatchObject({ status: "AVAILABLE", currentOrderId: null });
+    expect((await posDb.syncOperations.toArray()).at(-1)).toMatchObject({
+      operationType: "CANCEL_ORDER",
+      payload: { id: orderId, expectedVersion: 1 },
+    });
+  });
+
   it("reopens a bill-requested order and restores its table for editing", async () => {
     await posDb.orders.put({
       id: "order-reopen",

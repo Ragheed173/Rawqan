@@ -69,6 +69,7 @@ async function dispatch(operation: PushOperation, actorId: string, deviceId: str
     case "REMOVE_ORDER_ITEM": return commands.removeOrderItem(schemas.uuid.parse(payload.orderId), schemas.uuid.parse(payload.itemId), schemas.versionBody.parse(payload).expectedVersion, context, tx);
     case "REQUEST_BILL": return commands.requestBill(parseId(payload), schemas.versionBody.parse(payload).expectedVersion, context, tx);
     case "REOPEN_ORDER": return commands.reopenOrder(parseId(payload), schemas.versionBody.parse(payload).expectedVersion, context, tx);
+    case "CANCEL_ORDER": return commands.cancelOrder(parseId(payload), schemas.versionBody.parse(payload).expectedVersion, context, tx);
     case "TRANSFER_ORDER": return commands.transferOrder(parseId(payload), schemas.transferBody.parse(payload), context, tx);
     case "MERGE_ORDERS": return commands.mergeOrders(parseId(payload), schemas.mergeBody.parse(payload), context, tx);
     case "APPLY_DISCOUNT": return commands.applyOrderDiscount(parseId(payload), schemas.discountBody.parse(payload), context, tx);

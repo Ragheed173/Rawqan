@@ -49,6 +49,7 @@ const persistenceLabels = {
 } as const;
 
 export default function DiagnosticsPage() {
+  const isDesktop = Boolean(window.rawaqanDesktop?.isDesktop);
   const state = usePosLive(
     () => posDb.deviceState.get("primary"),
     undefined,
@@ -198,8 +199,11 @@ export default function DiagnosticsPage() {
     },
     {
       label: "Service worker",
-      value: `${worker.version} — ${worker.controlled && worker.shellReady ? "جاهز دون اتصال" : "غير جاهز"}`,
-      tone: worker.controlled && worker.shellReady ? "good" : "warn",
+      value: isDesktop
+        ? "غير مطلوب — تطبيق الديسكتوب جاهز دون اتصال"
+        : `${worker.version} — ${worker.controlled && worker.shellReady ? "جاهز دون اتصال" : "غير جاهز"}`,
+      tone:
+        isDesktop || (worker.controlled && worker.shellReady) ? "good" : "warn",
     },
     {
       label: "إصدار التطبيق",

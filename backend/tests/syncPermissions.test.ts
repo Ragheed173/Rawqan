@@ -4,6 +4,7 @@ import { assertSyncOperationPermission } from "../src/modules/pos/sync.service.j
 describe("offline sync authorization", () => {
   it("allows cashier operational replay", () => {
     expect(() => assertSyncOperationPermission("CASHIER", "OPEN_ORDER")).not.toThrow();
+    expect(() => assertSyncOperationPermission("CASHIER", "CANCEL_ORDER")).not.toThrow();
     expect(() => assertSyncOperationPermission("CASHIER", "CREATE_PAYMENT")).not.toThrow();
     expect(() => assertSyncOperationPermission("CASHIER", "CREATE_RESERVATION")).not.toThrow();
   });

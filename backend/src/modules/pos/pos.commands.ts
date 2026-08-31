@@ -306,6 +306,36 @@ export function reopenOrder(orderId: string, expectedVersion: number, context: P
   }, existingTx);
 }
 
+export function cancelOrder(orderId: string, expectedVersion: number, context: PosActorContext, existingTx?: PosTx) {
+  return inTransaction(async (tx) => {
+    const { actor } = await loadContext(tx, context);
+    const order = await assertOrderVersion(tx, orderId, expectedVersion);
+    assertOrderTransition(order.status, "CANCELLED");
+    const billed = await tx.invoiceOrder.findFirst({ where: { orderId } });
+    posAssert(!billed, "INVALID_ORDER_STATE", "A billed order cannot be cancelled");
+    const updated = await tx.order.update({
+      where: { id: orderId },
+      data: {
+        status: "CANCELLED",
+        version: { increment: 1 },
+        closedAt: new Date(),
+      },
+    });
+    await releaseOrderTables(tx, orderId, actor);
+    await writeActivity({
+      ...actorAudit(actor),
+      action: "ORDER_CANCELLED",
+      entityType: "Order",
+      entityId: orderId,
+      deviceId: context.deviceId,
+      operationId: context.operationId,
+      beforeData: { status: order.status },
+      afterData: { status: updated.status },
+    }, tx);
+    return updated;
+  }, existingTx);
+}
+
 export function transferOrder(orderId: string, input: { expectedVersion: number; destinationTableId: string }, context: PosActorContext, existingTx?: PosTx) {
   return inTransaction(async (tx) => {
     const { actor } = await loadContext(tx, context);

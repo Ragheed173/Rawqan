@@ -1,7 +1,7 @@
 export type MinorString = string;
 export type SyncState = "PENDING" | "SYNCING" | "SUCCEEDED" | "FAILED" | "CONFLICT";
 
-export interface LocalOrder { id: string; status: "OPEN" | "BILL_REQUESTED" | "PARTIALLY_BILLED" | "CLOSED" | "CANCELLED" | "MERGED"; version: number; businessDate: string; deviceId: string; openedById: string; openedAt: string; guestCount?: number | null; notes?: string | null; }
+export interface LocalOrder { id: string; status: "OPEN" | "BILL_REQUESTED" | "PARTIALLY_BILLED" | "CLOSED" | "CANCELLED" | "MERGED"; version: number; businessDate: string; deviceId: string; openedById: string; openedAt: string; closedAt?: string | null; guestCount?: number | null; notes?: string | null; }
 export interface LocalOrderTable { id: string; orderId: string; tableId: string; assignedAt: string; releasedAt?: string | null; isPrimary: boolean; }
 export interface LocalOrderItem { id: string; orderId: string; menuItemId?: string | null; itemNameSnapshot: string; itemNameEnSnapshot?: string | null; unitPriceMinor: MinorString; quantity: number; lineTotalMinor: MinorString; notes?: string | null; sortOrder: number; }
 export interface LocalOrderModifier { id: string; orderItemId: string; modifierOptionId?: string | null; groupNameSnapshot: string; optionNameSnapshot: string; priceTypeSnapshot: "DELTA" | "REPLACEMENT"; unitPriceMinor: MinorString; quantity: number; lineTotalMinor: MinorString; }

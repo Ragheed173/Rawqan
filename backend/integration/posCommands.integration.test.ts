@@ -4,6 +4,7 @@ import { prisma } from "../src/lib/prisma.js";
 import {
   addOrderItem,
   applyOrderDiscount,
+  cancelOrder,
   closeShift,
   createPayment,
   createReservation,
@@ -56,6 +57,22 @@ async function orderWithCustomItem(quantity: number, price: string, modifierOpti
 }
 
 describe("transactional POS commands on PostgreSQL", () => {
+  it("cancels an unbilled order and releases its table", async () => {
+    const { table, orderId } = await orderWithItem();
+    const cancelled = await cancelOrder(orderId, 2, fixture);
+    expect(cancelled.status).toBe("CANCELLED");
+    expect(cancelled.closedAt).not.toBeNull();
+    expect(
+      await prisma.orderTableAssignment.count({
+        where: { orderId, releasedAt: null },
+      }),
+    ).toBe(0);
+    expect(
+      (await prisma.diningTable.findUniqueOrThrow({ where: { id: table.id } }))
+        .status,
+    ).toBe("AVAILABLE");
+  });
+
   it("replays the same offline shift open and close without duplicating state", async () => {
     const suffix = randomUUID();
     const [actor, device] = await Promise.all([
