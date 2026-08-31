@@ -123,7 +123,16 @@ export async function pushOperations(actorId: string, deviceId: string, operatio
       throw await localSequenceConflict(deviceId);
     }
     const succeededDependencies = operation.dependencies.length ? await prisma.syncOperation.count({ where: { operationId: { in: operation.dependencies }, status: "SUCCEEDED" } }) : 0;
-    posAssert(succeededDependencies === operation.dependencies.length, "SYNC_DEPENDENCY_MISSING", "One or more operation dependencies have not succeeded");
+    // Cancellation is safe to validate from the persisted order itself. This
+    // lets an old desktop queue recover when a historical sync-operation row
+    // was pruned or lost, while the command still enforces exact version,
+    // state, billing and table-assignment invariants transactionally.
+    const canRecoverMissingDependencies = operation.operationType === "CANCEL_ORDER";
+    posAssert(
+      succeededDependencies === operation.dependencies.length || canRecoverMissingDependencies,
+      "SYNC_DEPENDENCY_MISSING",
+      "One or more operation dependencies have not succeeded",
+    );
     try {
       const result = await prisma.$transaction(async (tx) => {
         await tx.syncOperation.upsert({ where: { operationId: operation.operationId }, create: { operationId: operation.operationId, deviceId, localSequence: operation.localSequence, requestHash: operation.requestHash, operationType: operation.operationType, status: "PROCESSING" }, update: { status: "PROCESSING", errorCode: null, errorMessage: null, processedAt: null } });

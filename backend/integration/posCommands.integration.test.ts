@@ -73,6 +73,30 @@ describe("transactional POS commands on PostgreSQL", () => {
     ).toBe("AVAILABLE");
   });
 
+  it("recovers cancellation when a historical sync dependency is missing", async () => {
+    const { table, orderId } = await orderWithItem();
+    const operationId = randomUUID();
+    const payload = { id: orderId, expectedVersion: 2 };
+    const dependencies = [randomUUID()];
+    const requestHash = hashOperationRequest({
+      operationType: "CANCEL_ORDER",
+      payload,
+      dependencies,
+    });
+
+    await pushOperations(fixture.actorId, fixture.deviceId, [{
+      operationId,
+      localSequence: 890_000n + BigInt(Math.floor(Math.random() * 10_000)),
+      requestHash,
+      operationType: "CANCEL_ORDER",
+      payload,
+      dependencies,
+    }]);
+
+    expect((await prisma.order.findUniqueOrThrow({ where: { id: orderId } })).status).toBe("CANCELLED");
+    expect((await prisma.diningTable.findUniqueOrThrow({ where: { id: table.id } })).status).toBe("AVAILABLE");
+  });
+
   it("replays the same offline shift open and close without duplicating state", async () => {
     const suffix = randomUUID();
     const [actor, device] = await Promise.all([
