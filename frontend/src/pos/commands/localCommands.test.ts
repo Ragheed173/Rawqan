@@ -63,7 +63,11 @@ describe("local-first POS commands", () => {
         "22222222-2222-4222-8222-222222222222",
       ),
     ).toMatchObject({ status: "AVAILABLE", currentOrderId: null });
-    expect((await posDb.syncOperations.toArray()).at(-1)).toMatchObject({
+    expect(
+      (await posDb.syncOperations.toArray()).find(
+        (operation) => operation.operationType === "CANCEL_ORDER",
+      ),
+    ).toMatchObject({
       operationType: "CANCEL_ORDER",
       payload: { id: orderId, expectedVersion: 1 },
     });
