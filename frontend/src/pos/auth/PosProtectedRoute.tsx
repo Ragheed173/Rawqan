@@ -2,9 +2,8 @@ import { useEffect, useState } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuthStore } from "@/store/auth";
 import type { OfflineSession } from "../types";
-import { posDb } from "../db/schema";
 import { verifyPosStorage } from "../db/diagnostics";
-import { unlockOffline } from "./offline";
+import { prepareStandaloneSession, unlockOffline } from "./offline";
 
 const unlockMessages: Record<string, string> = {
   INVALID_PIN: "PIN غير صحيح.",
@@ -31,9 +30,7 @@ export function PosProtectedRoute() {
         setSession(null);
         return;
       }
-      void posDb.offlineSession
-        .toCollection()
-        .first()
+      void prepareStandaloneSession()
         .then((value) =>
           setSession(value ? { ...value, unlockedAt: undefined } : null),
         );
@@ -65,10 +62,14 @@ export function PosProtectedRoute() {
     );
   if (
     status === "authenticated" ||
-    (session?.unlockedAt && new Date(session.expiresAt) > new Date())
+    (session?.unlockedAt &&
+      (session.standalone || new Date(session.expiresAt) > new Date()))
   )
     return <Outlet />;
-  if (status === "idle" || status === "loading" || session === undefined)
+  if (
+    session === undefined ||
+    ((status === "idle" || status === "loading") && !session)
+  )
     return (
       <div className="pos-theme grid min-h-screen place-items-center">
         جارٍ التحقق…

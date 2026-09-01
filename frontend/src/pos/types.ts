@@ -14,7 +14,13 @@ export interface LocalPayment { id: string; invoiceId: string; method: "CASH" | 
 export interface LocalReceiptPrintEvent { id: string; invoiceId: string; type: "INITIAL" | "REPRINT"; paperWidthMm: 58 | 80; profileName: "58mm" | "80mm"; createdAt: string; }
 export interface SyncOperation { operationId: string; deviceId: string; localSequence: MinorString; requestHash: string; operationType: string; payload: Record<string, unknown>; dependencies: string[]; status: SyncState; attempts: number; nextAttemptAt?: string; errorCode?: string; errorMessage?: string; createdAt: string; processedAt?: string; }
 export interface DeviceState { key: "primary"; deviceId: string; deviceCode: string; nextLocalSequence: MinorString; invoiceYear: number; nextInvoiceSequence: number; catalogRevision: MinorString; lastSuccessfulSync?: string; timezone?: string; businessDayCutoff?: string; restaurantName?: string; receiptFooter?: string | null; posCacheEpoch?: number; }
-export interface OfflineSession { id: string; deviceId: string; userId: string; role: string; permissions: string[]; capability: string; expiresAt: string; unlockedAt?: string; failedPinAttempts?: number; lockedUntil?: string; }
+export interface OfflinePinVerifier {
+  algorithm: "PBKDF2-SHA256";
+  iterations: number;
+  saltBase64: string;
+  hashBase64: string;
+}
+export interface OfflineSession { id: string; deviceId: string; userId: string; role: string; permissions: string[]; capability: string; expiresAt: string; standalone?: boolean; pinVerifier?: OfflinePinVerifier; unlockedAt?: string; failedPinAttempts?: number; lockedUntil?: string; }
 
 export const addMinor = (...values: MinorString[]) => values.reduce((total, value) => total + BigInt(value), 0n).toString();
 export const multiplyMinor = (value: MinorString, quantity: number) => (BigInt(value) * BigInt(quantity)).toString();

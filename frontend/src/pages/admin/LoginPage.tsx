@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -13,6 +13,7 @@ import { Logo } from '@/components/shared/Logo';
 import { Seo } from '@/components/shared/Seo';
 import { useAuthStore } from '@/store/auth';
 import { getApiErrorMessage } from '@/lib/apiClient';
+import { posDb } from '@/pos/db/schema';
 
 const schema = z.object({
   email: z.string().email('بريد إلكتروني غير صالح'),
@@ -32,6 +33,7 @@ export default function LoginPage() {
       ? locationState.from
       : '/admin';
   const sessionExpired = locationState?.reason === 'session-expired';
+  const [offlineReady, setOfflineReady] = useState(false);
 
   const {
     register,
@@ -42,6 +44,11 @@ export default function LoginPage() {
   useEffect(() => {
     if (status === 'authenticated') navigate(requestedPath, { replace: true });
   }, [status, navigate, requestedPath]);
+
+  useEffect(() => {
+    if (!window.rawaqanDesktop?.isDesktop) return;
+    void posDb.offlineSession.count().then((count) => setOfflineReady(count > 0));
+  }, []);
 
   const onSubmit = async (values: FormValues) => {
     try {
@@ -118,6 +125,15 @@ export default function LoginPage() {
               {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : 'دخول'}
             </Button>
           </form>
+          {offlineReady && (
+            <button
+              type="button"
+              onClick={() => navigate('/pos', { replace: true })}
+              className="mt-4 min-h-12 w-full rounded-xl border border-amber-400/50 bg-amber-400/10 font-bold text-amber-100"
+            >
+              فتح نقطة البيع دون إنترنت
+            </button>
+          )}
         </motion.div>
       </div>
     </>

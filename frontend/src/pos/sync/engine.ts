@@ -16,6 +16,7 @@ import type {
 } from "../types";
 import { config } from "@/config/env";
 import { posErrorCode, posErrorMessage } from "../errors";
+import { scheduleDesktopBackup } from "../db/backup";
 
 let running: Promise<void> | null = null;
 export function syncNow(options: { retryFailed?: boolean } = {}) {
@@ -132,6 +133,7 @@ async function runSync(options: RunSyncOptions = {}) {
     businessDayCutoff: pull.configuration.settings?.businessDayCutoff,
     restaurantName: pull.configuration.settings?.name,
   });
+  scheduleDesktopBackup("cloud-sync");
 }
 
 interface InvoiceIdentity {
@@ -822,4 +824,5 @@ export async function applyBootstrap(data: {
       });
     },
   );
+  scheduleDesktopBackup("bootstrap");
 }

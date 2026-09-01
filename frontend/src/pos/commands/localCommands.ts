@@ -2,11 +2,12 @@ import type { Table } from "dexie";
 import { posDb, type LocalReservation } from "../db/schema";
 import { requestHash } from "../sync/hash";
 import { addMinor, allocateMinorLinesToTargets, multiplyMinor, splitMinorEqual, type LocalInvoice, type LocalInvoiceAllocationLine, type LocalOrderItem, type LocalPayment, type SyncOperation } from "../types";
+import { scheduleDesktopBackup } from "../db/backup";
 
 async function localOperation<T>(operationType: string, payload: Record<string, unknown>, tables: Table[], mutate: () => Promise<T>, dependencies: string[] = []) {
   const operationId = crypto.randomUUID();
   const hash = await requestHash(operationType, payload, dependencies);
-  return posDb.transaction("rw", [...tables, posDb.syncOperations, posDb.deviceState], async () => {
+  const committed = await posDb.transaction("rw", [...tables, posDb.syncOperations, posDb.deviceState], async () => {
     const state = await posDb.deviceState.get("primary");
     if (!state) throw new Error("DEVICE_NOT_PAIRED");
     const sequence = BigInt(state.nextLocalSequence);
@@ -16,6 +17,8 @@ async function localOperation<T>(operationType: string, payload: Record<string, 
     await posDb.deviceState.update("primary", { nextLocalSequence: (sequence + 1n).toString() });
     return { result, operation };
   });
+  scheduleDesktopBackup(operationType);
+  return committed;
 }
 
 export async function openLocalOrder(input: { tableId: string; userId: string; businessDate: string; guestCount?: number; notes?: string }) {

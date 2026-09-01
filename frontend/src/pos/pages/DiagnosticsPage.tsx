@@ -9,11 +9,19 @@ import {
   verifyPosStorage,
   type PosStorageHealth,
 } from "../db/diagnostics";
+import { flushDesktopBackup } from "../db/backup";
 
 interface WorkerStatus {
   version: string;
   shellReady: boolean;
   controlled: boolean;
+}
+
+interface BackupStatus {
+  available: boolean;
+  directory: string;
+  fileName?: string;
+  lastBackupAt?: string;
 }
 
 async function serviceWorkerStatus(): Promise<WorkerStatus> {
@@ -95,19 +103,29 @@ export default function DiagnosticsPage() {
     shellReady: false,
     controlled: false,
   });
+  const [backup, setBackup] = useState<BackupStatus | null>(null);
+  const [desktopVersion, setDesktopVersion] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const refresh = async (requestPersistence = false) => {
     if (busy) return;
     setBusy(true);
-    const [nextStorage, nextBackend, nextWorker] = await Promise.all([
+    const [nextStorage, nextBackend, nextWorker, nextBackup, appInfo] = await Promise.all([
       requestPersistence ? requestPosPersistence() : verifyPosStorage(),
       checkBackendHealth(),
       serviceWorkerStatus(),
+      isDesktop
+        ? window.rawaqanDesktop?.getBackupStatus?.() ?? Promise.resolve(null)
+        : Promise.resolve(null),
+      isDesktop
+        ? window.rawaqanDesktop?.getAppInfo?.() ?? Promise.resolve(null)
+        : Promise.resolve(null),
     ]);
     setStorage(nextStorage);
     setBackend(nextBackend);
     setWorker(nextWorker);
+    setBackup(nextBackup);
+    setDesktopVersion(appInfo?.version);
     setBusy(false);
   };
   useEffect(() => {
@@ -129,7 +147,9 @@ export default function DiagnosticsPage() {
     }
   };
   const capabilityExpired = Boolean(
-    session?.expiresAt && new Date(session.expiresAt) <= new Date(),
+    !session?.standalone &&
+      session?.expiresAt &&
+      new Date(session.expiresAt) <= new Date(),
   );
   type Tone = "neutral" | "good" | "warn" | "danger";
   const rows: { label: string; value: string; tone: Tone }[] = [
@@ -192,10 +212,30 @@ export default function DiagnosticsPage() {
     },
     {
       label: "انتهاء صلاحية العمل دون اتصال",
-      value: session?.expiresAt
-        ? new Date(session.expiresAt).toLocaleString("ar")
-        : "غير متاح",
+      value: session?.standalone
+        ? "وضع مستقل — لا تنتهي محلياً"
+        : session?.expiresAt
+          ? new Date(session.expiresAt).toLocaleString("ar")
+          : "غير متاح",
       tone: capabilityExpired ? "danger" : "neutral",
+    },
+    ...(isDesktop
+      ? [
+          {
+            label: "آخر نسخة احتياطية محلية",
+            value: backup?.lastBackupAt
+              ? `${new Date(backup.lastBackupAt).toLocaleString("ar")} — ${backup.directory}`
+              : "لم تُنشأ بعد",
+            tone: backup?.available ? ("good" as const) : ("warn" as const),
+          },
+        ]
+      : []),
+    {
+      label: "نمط التشغيل",
+      value: isDesktop
+        ? "مستقل محلياً — Render للمزامنة والنسخ السحابي"
+        : "متصفح متصل بالخادم",
+      tone: isDesktop ? "good" : "neutral",
     },
     {
       label: "Service worker",
@@ -207,7 +247,7 @@ export default function DiagnosticsPage() {
     },
     {
       label: "إصدار التطبيق",
-      value: import.meta.env.VITE_APP_VERSION ?? "1.0.0",
+      value: desktopVersion ?? import.meta.env.VITE_APP_VERSION ?? "1.0.0",
       tone: "neutral",
     },
   ];
@@ -227,6 +267,30 @@ export default function DiagnosticsPage() {
         >
           {busy ? "جارٍ الفحص…" : "تحديث الفحص"}
         </button>
+        {isDesktop && (
+          <button
+            disabled={busy}
+            onClick={() => {
+              if (busy) return;
+              setBusy(true);
+              setMessage("");
+              void flushDesktopBackup("manual")
+                .then(async () => {
+                  setBackup(
+                    (await window.rawaqanDesktop?.getBackupStatus?.()) ?? null,
+                  );
+                  setMessage("تم حفظ نسخة احتياطية محلية مشفرة.");
+                })
+                .catch(() =>
+                  setMessage("تعذر حفظ النسخة الاحتياطية المحلية."),
+                )
+                .finally(() => setBusy(false));
+            }}
+            className="min-h-12 rounded-xl border border-slate-300 bg-white px-4 font-bold disabled:opacity-50"
+          >
+            نسخة احتياطية الآن
+          </button>
+        )}
       </div>
       {storage.persistent === false && (
         <div

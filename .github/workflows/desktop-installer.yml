@@ -37,8 +37,8 @@ jobs:
       - name: Install desktop build dependencies
         run: npm ci --prefix desktop
 
-      - name: Run receipt and checkout tests
-        run: npm run test --workspace frontend -- src/pos/printing/ReceiptPrinter.test.ts src/pos/pages/CheckoutPage.test.tsx
+      - name: Run standalone POS safety tests
+        run: npm run test --workspace frontend -- src/pos/auth/PosProtectedRoute.test.tsx src/pos/auth/offline.test.ts src/pos/db/backup.test.ts src/pos/commands/localCommands.test.ts src/pos/sync/engine.test.ts src/pos/printing/ReceiptPrinter.test.ts src/pos/pages/CheckoutPage.test.tsx
 
       - name: Build signed-ready NSIS installer
         run: npm run dist:win --prefix desktop

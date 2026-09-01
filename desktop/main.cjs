@@ -9,7 +9,16 @@ const {
   safeStorage,
   shell,
 } = require("electron");
-const { existsSync, readFileSync, renameSync, writeFileSync } = require("node:fs");
+const {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} = require("node:fs");
 const { dirname, extname, join, normalize, relative, resolve } = require("node:path");
 const { pathToFileURL } = require("node:url");
 
@@ -20,6 +29,9 @@ const APP_URL = `${APP_SCHEME}://${APP_HOST}/pos`;
 const API_ORIGIN = "https://rawaqan-api.onrender.com";
 const REFRESH_COOKIE_NAME = "rawaqan_rt";
 const VIRTUAL_PRINTER = /pdf|onenote|fax|xps|anydesk/i;
+const BACKUP_FORMAT = "RWQ-POS-BACKUP-1";
+const MAX_BACKUP_BYTES = 64 * 1024 * 1024;
+const BACKUP_RETENTION_DAYS = 31;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -56,6 +68,71 @@ function writeJsonAtomic(name, value) {
   const temporary = `${target}.tmp`;
   writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8");
   renameSync(temporary, target);
+}
+
+function backupDirectory() {
+  return join(app.getPath("documents"), "Rawaqan POS Backups");
+}
+
+function backupFiles() {
+  const directory = backupDirectory();
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory)
+    .filter((name) => /^rawaqan-pos-\d{4}-\d{2}-\d{2}\.rwqbackup$/.test(name))
+    .map((name) => {
+      const path = join(directory, name);
+      return { name, path, modifiedAt: statSync(path).mtime.toISOString() };
+    })
+    .sort((left, right) => right.name.localeCompare(left.name));
+}
+
+function backupStatus() {
+  const latest = backupFiles()[0];
+  return {
+    available: Boolean(latest),
+    directory: backupDirectory(),
+    fileName: latest?.name,
+    lastBackupAt: latest?.modifiedAt,
+  };
+}
+
+function saveLocalBackup(snapshot) {
+  if (
+    !snapshot ||
+    typeof snapshot !== "object" ||
+    snapshot.formatVersion !== 1 ||
+    typeof snapshot.createdAt !== "string" ||
+    !snapshot.tables ||
+    typeof snapshot.tables !== "object"
+  ) {
+    throw new Error("INVALID_BACKUP_SNAPSHOT");
+  }
+  const json = JSON.stringify(snapshot, (_key, value) =>
+    typeof value === "bigint" ? value.toString() : value,
+  );
+  if (Buffer.byteLength(json, "utf8") > MAX_BACKUP_BYTES)
+    throw new Error("BACKUP_TOO_LARGE");
+
+  const directory = backupDirectory();
+  mkdirSync(directory, { recursive: true });
+  const date = new Date().toISOString().slice(0, 10);
+  const target = join(directory, `rawaqan-pos-${date}.rwqbackup`);
+  const temporary = `${target}.tmp`;
+  const encrypted = safeStorage.isEncryptionAvailable();
+  const payload = encrypted
+    ? safeStorage.encryptString(json)
+    : Buffer.from(json, "utf8");
+  const envelope = Buffer.concat([
+    Buffer.from(`${BACKUP_FORMAT}\n${encrypted ? "encrypted" : "plain"}\n`, "utf8"),
+    payload,
+  ]);
+  writeFileSync(temporary, envelope);
+  rmSync(target, { force: true });
+  renameSync(temporary, target);
+
+  for (const old of backupFiles().slice(BACKUP_RETENTION_DAYS))
+    rmSync(old.path, { force: true });
+  return { ok: true, path: target, encrypted, lastBackupAt: new Date().toISOString() };
 }
 
 function loadSettings() {
@@ -425,6 +502,15 @@ else {
     await protocol.handle(APP_SCHEME, serveApp);
 
     ipcMain.handle("rawaqan:get-settings", async () => ({ ...settings }));
+    ipcMain.handle("rawaqan:get-app-info", async () => ({
+      version: app.getVersion(),
+      mode: "standalone-cloud-sync",
+      cloudOrigin: API_ORIGIN,
+    }));
+    ipcMain.handle("rawaqan:get-backup-status", async () => backupStatus());
+    ipcMain.handle("rawaqan:save-local-backup", (_event, snapshot) =>
+      saveLocalBackup(snapshot),
+    );
     ipcMain.handle("rawaqan:configure-printer", configurePrinter);
     ipcMain.handle("rawaqan:print-receipt", (_event, job) => printHtml(job || {}));
     ipcMain.handle("rawaqan:clear-session", async () => {

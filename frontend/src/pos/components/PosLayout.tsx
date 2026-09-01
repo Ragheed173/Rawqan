@@ -28,6 +28,7 @@ import { verifyPosStorage } from "../db/diagnostics";
 import { posErrorMessage } from "../errors";
 import { useAuthStore } from "@/store/auth";
 import { usePermissions } from "@/hooks/usePermissions";
+import { scheduleDesktopBackup } from "../db/backup";
 
 export function PosLayout() {
   const navigate = useNavigate();
@@ -157,6 +158,12 @@ export function PosLayout() {
         state: { from: window.location.pathname, reason: "session-expired" },
       });
     };
+    const cloudAuthenticationRequired = () => {
+      setOnline(false);
+      setDiagnostic(
+        "انتهت جلسة النسخ السحابي. يستمر البيع محلياً دون توقف؛ سجّل الدخول عند توفر الإنترنت لاستئناف النسخ إلى Render.",
+      );
+    };
     window.addEventListener("online", updateOnline);
     window.addEventListener("offline", updateOnline);
     window.addEventListener("rawaqan-pos-connectivity", backendConnectivity);
@@ -164,8 +171,13 @@ export function PosLayout() {
     window.addEventListener("unhandledrejection", storageFailure);
     window.addEventListener("rawaqan-sw-update", swUpdate);
     window.addEventListener("rawaqan-auth-required", authenticationRequired);
+    window.addEventListener(
+      "rawaqan-pos-cloud-auth-required",
+      cloudAuthenticationRequired,
+    );
     void verifyPosStorage().then((health) => {
       if (health.message) setDiagnostic(health.message);
+      if (health.available) scheduleDesktopBackup("startup");
     });
     if (!isDesktop && "serviceWorker" in navigator)
       void navigator.serviceWorker.ready.then(async (registration) => {
@@ -185,6 +197,10 @@ export function PosLayout() {
       window.removeEventListener("unhandledrejection", storageFailure);
       window.removeEventListener("rawaqan-sw-update", swUpdate);
       window.removeEventListener("rawaqan-auth-required", authenticationRequired);
+      window.removeEventListener(
+        "rawaqan-pos-cloud-auth-required",
+        cloudAuthenticationRequired,
+      );
     };
   }, [expireAuthentication, isDesktop, navigate]);
 

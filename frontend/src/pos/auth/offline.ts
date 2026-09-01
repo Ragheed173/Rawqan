@@ -1,5 +1,7 @@
 import { posDb } from "../db/schema";
 import { requestPosPersistence } from "../db/diagnostics";
+import type { OfflinePinVerifier, OfflineSession } from "../types";
+import { scheduleDesktopBackup } from "../db/backup";
 
 interface CapabilityPayload {
   version: 2;
@@ -7,12 +9,7 @@ interface CapabilityPayload {
   userId: string;
   role: string;
   permissions: string[];
-  pinVerifier: {
-    algorithm: "PBKDF2-SHA256";
-    iterations: number;
-    saltBase64: string;
-    hashBase64: string;
-  };
+  pinVerifier: OfflinePinVerifier;
   issuedAt: string;
   expiresAt: string;
 }
@@ -29,7 +26,7 @@ const b64 = (value: string) =>
 
 async function verifyPin(
   pin: string,
-  verifier: CapabilityPayload["pinVerifier"],
+  verifier: OfflinePinVerifier,
 ) {
   if (verifier.algorithm !== "PBKDF2-SHA256" || verifier.iterations < 100_000)
     throw new Error("OFFLINE_CAPABILITY_REPAIR_REQUIRED");
@@ -110,12 +107,47 @@ export async function verifyAndStoreCapability(
     permissions: payload.permissions,
     capability,
     expiresAt: payload.expiresAt,
+    standalone: Boolean(window.rawaqanDesktop?.isDesktop),
+    pinVerifier: payload.pinVerifier,
     failedPinAttempts: 0,
   });
   // Pairing is an explicit user gesture and the best opportunity for browsers to
   // grant persistence. Denial must never prevent the terminal from operating.
   await requestPosPersistence();
+  scheduleDesktopBackup("device-pairing");
   return payload;
+}
+
+/**
+ * Promotes an already verified desktop pairing to a permanent local cashier
+ * profile. The signed capability is still retained for audit and cloud sync,
+ * while the local PIN verifier keeps the single-terminal POS usable when the
+ * Render session or internet connection is unavailable.
+ */
+export async function prepareStandaloneSession(): Promise<OfflineSession | null> {
+  const session = await posDb.offlineSession.toCollection().first();
+  if (!session) return null;
+  if (!window.rawaqanDesktop?.isDesktop) return session;
+
+  let pinVerifier = session.pinVerifier;
+  if (!pinVerifier) {
+    const body = session.capability.split(".")[1];
+    if (!body) throw new Error("INVALID_CAPABILITY");
+    const payload = JSON.parse(
+      new TextDecoder().decode(b64(body)),
+    ) as CapabilityPayload;
+    if (payload.version !== 2 || !payload.pinVerifier)
+      throw new Error("OFFLINE_CAPABILITY_REPAIR_REQUIRED");
+    pinVerifier = payload.pinVerifier;
+  }
+
+  if (!session.standalone || !session.pinVerifier) {
+    await posDb.offlineSession.update(session.id, {
+      standalone: true,
+      pinVerifier,
+    });
+  }
+  return { ...session, standalone: true, pinVerifier };
 }
 
 export async function unlockOffline(
@@ -124,7 +156,10 @@ export async function unlockOffline(
   pin: string,
 ) {
   const session = await posDb.offlineSession.get(`${deviceId}:${userId}`);
-  if (!session || new Date(session.expiresAt) <= new Date())
+  const standalone = Boolean(
+    session?.standalone && window.rawaqanDesktop?.isDesktop,
+  );
+  if (!session || (!standalone && new Date(session.expiresAt) <= new Date()))
     throw new Error("OFFLINE_CAPABILITY_EXPIRED");
   if (session.lockedUntil && new Date(session.lockedUntil) > new Date())
     throw new Error("OFFLINE_PIN_LOCKED");
@@ -133,9 +168,10 @@ export async function unlockOffline(
   const payload = JSON.parse(
     new TextDecoder().decode(b64(body)),
   ) as CapabilityPayload;
-  if (payload.version !== 2 || !payload.pinVerifier)
+  const pinVerifier = session.pinVerifier ?? payload.pinVerifier;
+  if (payload.version !== 2 || !pinVerifier)
     throw new Error("OFFLINE_CAPABILITY_REPAIR_REQUIRED");
-  if (!(await verifyPin(pin, payload.pinVerifier))) {
+  if (!(await verifyPin(pin, pinVerifier))) {
     const attempts = (session.failedPinAttempts ?? 0) + 1;
     const lockedUntil =
       attempts >= 5

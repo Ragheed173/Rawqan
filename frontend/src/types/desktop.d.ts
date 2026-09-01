@@ -16,6 +16,23 @@ interface RawaqanDesktopPrintJob {
 interface RawaqanDesktopBridge {
   readonly isDesktop: true;
   getSettings(): Promise<RawaqanDesktopSettings>;
+  getAppInfo?(): Promise<{
+    version: string;
+    mode: "standalone-cloud-sync";
+    cloudOrigin: string;
+  }>;
+  getBackupStatus?(): Promise<{
+    available: boolean;
+    directory: string;
+    fileName?: string;
+    lastBackupAt?: string;
+  }>;
+  saveLocalBackup?(snapshot: import("@/pos/db/backup").PosBackupSnapshot): Promise<{
+    ok: boolean;
+    path: string;
+    encrypted: boolean;
+    lastBackupAt: string;
+  }>;
   configurePrinter(): Promise<RawaqanDesktopSettings & { printers?: unknown[] }>;
   clearSession(): Promise<{ ok: boolean }>;
   printReceipt(job: RawaqanDesktopPrintJob): Promise<{
