@@ -1,6 +1,6 @@
 {
   "name": "@rawaqan/pos-desktop",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "Rawaqan POS offline-first Windows desktop application",
   "main": "main.cjs",

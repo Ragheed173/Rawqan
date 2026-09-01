@@ -16,10 +16,8 @@ const { pathToFileURL } = require("node:url");
 const APP_SCHEME = "rawaqan";
 const APP_HOST = "app";
 const APP_URL = `${APP_SCHEME}://${APP_HOST}/pos`;
-// The cashier installation is LAN-first: the local restaurant server remains
-// reachable while the internet connection is down. Operators can still
-// override the origin for staging through RAWAQAN_API_ORIGIN before launch.
-const API_ORIGIN = (process.env.RAWAQAN_API_ORIGIN || "https://rawaqan.ragheed-server").replace(/\/$/, "");
+// The cashier installation uses the production Render API exclusively.
+const API_ORIGIN = "https://rawaqan-api.onrender.com";
 const REFRESH_COOKIE_NAME = "rawaqan_rt";
 const VIRTUAL_PRINTER = /pdf|onenote|fax|xps|anydesk/i;
 
