@@ -17,6 +17,13 @@ export interface PushOperation {
   dependencies: string[];
 }
 
+export function isAlreadySatisfiedSyncOutcome(
+  operationType: string,
+  errorCode: string,
+) {
+  return operationType === "CLOSE_SHIFT" && errorCode === "SHIFT_NOT_OPEN";
+}
+
 export const SYNC_OPERATION_PERMISSIONS: Readonly<Partial<Record<string, Permission>>> = {
   APPLY_DISCOUNT: "pos:discount",
   VOID_INVOICE: "pos:void",
@@ -157,6 +164,39 @@ export async function pushOperations(actorId: string, deviceId: string, operatio
       }
       const code = error instanceof PosDomainError ? error.code : "FAILED";
       const message = error instanceof Error ? error.message : "Sync operation failed";
+      // A stale offline close can arrive after the authoritative shift was
+      // already closed or removed. The requested final state (not open) is
+      // already true, so treating this as a durable no-op prevents an
+      // impossible retry loop without opening or changing another shift.
+      if (isAlreadySatisfiedSyncOutcome(operation.operationType, code)) {
+        const result = toJsonSafe({
+          id: operation.payload.id,
+          status: "CLOSED",
+          alreadySatisfied: true,
+        }) as Prisma.InputJsonValue;
+        await prisma.syncOperation.upsert({
+          where: { operationId: operation.operationId },
+          create: {
+            operationId: operation.operationId,
+            deviceId,
+            localSequence: operation.localSequence,
+            requestHash: operation.requestHash,
+            operationType: operation.operationType,
+            status: "SUCCEEDED",
+            result,
+            processedAt: new Date(),
+          },
+          update: {
+            status: "SUCCEEDED",
+            result,
+            errorCode: null,
+            errorMessage: null,
+            processedAt: new Date(),
+          },
+        });
+        results.push(result);
+        continue;
+      }
       await prisma.syncOperation.upsert({ where: { operationId: operation.operationId }, create: { operationId: operation.operationId, deviceId, localSequence: operation.localSequence, requestHash: operation.requestHash, operationType: operation.operationType, status: code === "SYNC_CONFLICT" ? "CONFLICT" : "FAILED", errorCode: code, errorMessage: message, processedAt: new Date() }, update: { status: code === "SYNC_CONFLICT" ? "CONFLICT" : "FAILED", errorCode: code, errorMessage: message, processedAt: new Date() } });
       throw error;
     }
