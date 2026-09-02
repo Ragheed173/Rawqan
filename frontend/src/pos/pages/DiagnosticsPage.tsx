@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { posDb } from "../db/schema";
 import { usePosLive } from "../hooks/usePosLive";
 import { checkBackendHealth, syncNow } from "../sync/engine";
@@ -10,6 +10,8 @@ import {
   type PosStorageHealth,
 } from "../db/diagnostics";
 import { flushDesktopBackup } from "../db/backup";
+import { isPosCloudAuthenticationRequired } from "@/lib/apiClient";
+import { useAuthStore } from "@/store/auth";
 
 interface WorkerStatus {
   version: string;
@@ -57,6 +59,8 @@ const persistenceLabels = {
 } as const;
 
 export default function DiagnosticsPage() {
+  const navigate = useNavigate();
+  const expireAuthentication = useAuthStore((value) => value.expire);
   const isDesktop = Boolean(window.rawaqanDesktop?.isDesktop);
   const state = usePosLive(
     () => posDb.deviceState.get("primary"),
@@ -84,6 +88,19 @@ export default function DiagnosticsPage() {
     0,
     [],
   );
+  const unauthorized = usePosLive(
+    () =>
+      posDb.syncOperations
+        .toCollection()
+        .filter(
+          (operation) =>
+            operation.status !== "SUCCEEDED" &&
+            operation.errorCode === "UNAUTHORIZED",
+        )
+        .count(),
+    0,
+    [],
+  );
   const attention = usePosLive(
     () =>
       posDb.syncOperations
@@ -107,6 +124,9 @@ export default function DiagnosticsPage() {
   const [desktopVersion, setDesktopVersion] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [cloudAuthRequired, setCloudAuthRequired] = useState(
+    isPosCloudAuthenticationRequired,
+  );
   const refresh = async (requestPersistence = false) => {
     if (busy) return;
     setBusy(true);
@@ -130,7 +150,21 @@ export default function DiagnosticsPage() {
   };
   useEffect(() => {
     void refresh();
+    const required = () => setCloudAuthRequired(true);
+    const restored = () => setCloudAuthRequired(false);
+    window.addEventListener("rawaqan-pos-cloud-auth-required", required);
+    window.addEventListener("rawaqan-pos-cloud-auth-restored", restored);
+    return () => {
+      window.removeEventListener("rawaqan-pos-cloud-auth-required", required);
+      window.removeEventListener("rawaqan-pos-cloud-auth-restored", restored);
+    };
   }, []);
+  const reconnectCloud = () => {
+    expireAuthentication();
+    navigate("/admin/login", {
+      state: { from: "/pos/diagnostics", reason: "session-expired" },
+    });
+  };
   const retrySync = async () => {
     if (busy) return;
     setBusy(true);
@@ -162,6 +196,13 @@ export default function DiagnosticsPage() {
       label: "الخادم",
       value: backend == null ? "جارٍ الفحص" : backend ? "متاح" : "غير متاح",
       tone: backend == null ? "neutral" : backend ? "good" : "danger",
+    },
+    {
+      label: "مزامنة Render",
+      value: cloudAuthRequired
+        ? `تحتاج تسجيل دخول — ${pending + failed} عملية محفوظة محلياً`
+        : "مرتبطة",
+      tone: cloudAuthRequired ? "warn" : "good",
     },
     {
       label: "آخر مزامنة ناجحة",
@@ -328,18 +369,27 @@ export default function DiagnosticsPage() {
           </div>
         ))}
       </dl>
-      {(failed > 0 || conflicts > 0 || capabilityExpired) && (
+      {(failed > 0 || conflicts > 0 || capabilityExpired || cloudAuthRequired) && (
         <div className="mt-4 rounded-xl bg-rose-50 p-4 text-rose-900">
           <b>لا تحذف العمليات.</b> الفشل القابل للمحاولة يبقى محفوظاً، والتعارض
           المالي يحتاج مراجعة المدير قبل أي تصحيح.
           <div className="mt-3 flex flex-wrap gap-2">
             <button
-              disabled={busy || !navigator.onLine}
+              disabled={busy || !navigator.onLine || cloudAuthRequired}
               onClick={() => void retrySync()}
               className="min-h-11 rounded-lg bg-slate-950 px-4 text-white disabled:opacity-50"
             >
               إعادة المحاولة / إعادة الاتصال
             </button>
+            {(cloudAuthRequired || unauthorized > 0) && (
+              <button
+                type="button"
+                onClick={reconnectCloud}
+                className="min-h-11 rounded-lg bg-amber-500 px-4 font-bold text-slate-950"
+              >
+                تسجيل الدخول إلى Render ومزامنة المحفوظ
+              </button>
+            )}
             {capabilityExpired && (
               <Link
                 to="/admin/login"

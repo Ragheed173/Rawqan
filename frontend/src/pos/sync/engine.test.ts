@@ -10,6 +10,7 @@ import {
   recoverInterruptedOperations,
   applyServerPosCacheEpoch,
   reconcilePushResult,
+  pauseUnauthorizedOperations,
 } from "./engine";
 
 beforeEach(async () => { posDb.close(); await posDb.delete(); await posDb.open(); });
@@ -247,6 +248,53 @@ describe("POS sync recovery", () => {
     await posDb.syncOperations.put({ operationId: "op", deviceId: "device", localSequence: "1", requestHash: "hash", operationType: "OPEN_ORDER", payload: {}, dependencies: [], status: "SYNCING", attempts: 1, createdAt: new Date().toISOString() });
     await recoverInterruptedOperations();
     expect(await posDb.syncOperations.get("op")).toMatchObject({ status: "FAILED", errorCode: "SYNC_INTERRUPTED", nextAttemptAt: expect.any(String) });
+  });
+
+  it("pauses unauthorized failures without deleting or repeatedly retrying them", async () => {
+    await posDb.syncOperations.bulkPut([
+      {
+        operationId: "unauthorized",
+        deviceId: "device",
+        localSequence: "1",
+        requestHash: "hash-1",
+        operationType: "OPEN_ORDER",
+        payload: {},
+        dependencies: [],
+        status: "FAILED",
+        attempts: 4,
+        errorCode: "UNAUTHORIZED",
+        nextAttemptAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      },
+      {
+        operationId: "network",
+        deviceId: "device",
+        localSequence: "2",
+        requestHash: "hash-2",
+        operationType: "ADD_ORDER_ITEM",
+        payload: {},
+        dependencies: [],
+        status: "FAILED",
+        attempts: 2,
+        errorCode: "BACKEND_UNAVAILABLE",
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+    await pauseUnauthorizedOperations();
+
+    expect(await posDb.syncOperations.get("unauthorized")).toMatchObject({
+      status: "PENDING",
+      attempts: 4,
+      errorCode: "UNAUTHORIZED",
+    });
+    expect(await posDb.syncOperations.get("unauthorized")).not.toHaveProperty(
+      "nextAttemptAt",
+    );
+    expect(await posDb.syncOperations.get("network")).toMatchObject({
+      status: "FAILED",
+      errorCode: "BACKEND_UNAVAILABLE",
+    });
   });
 
   it("safely applies a server-renumbered invoice without losing either local invoice", async () => {

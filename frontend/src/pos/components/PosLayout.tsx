@@ -23,7 +23,11 @@ import {
 } from "../sync/engine";
 import { usePosLive } from "../hooks/usePosLive";
 import { cn } from "@/lib/utils";
-import { api, unwrap } from "@/lib/apiClient";
+import {
+  api,
+  isPosCloudAuthenticationRequired,
+  unwrap,
+} from "@/lib/apiClient";
 import { verifyPosStorage } from "../db/diagnostics";
 import { posErrorMessage } from "../errors";
 import { useAuthStore } from "@/store/auth";
@@ -57,6 +61,16 @@ export function PosLayout() {
   const [pwaReady, setPwaReady] = useState(isDesktop);
   const [syncing, setSyncing] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [cloudAuthRequired, setCloudAuthRequired] = useState(
+    isPosCloudAuthenticationRequired,
+  );
+
+  const reconnectCloud = () => {
+    expireAuthentication();
+    navigate("/admin/login", {
+      state: { from: window.location.pathname, reason: "session-expired" },
+    });
+  };
 
   const handleLogout = async () => {
     if (loggingOut) return;
@@ -81,6 +95,10 @@ export function PosLayout() {
 
   const synchronize = async () => {
     if (syncing) return;
+    if (cloudAuthRequired) {
+      reconnectCloud();
+      return;
+    }
     setSyncing(true);
     setDiagnostic("");
     try {
@@ -98,7 +116,11 @@ export function PosLayout() {
 
   useEffect(() => {
     const deviceId = localStorage.getItem("rawaqan_pos_device_id");
-    if (deviceId && navigator.onLine)
+    if (
+      deviceId &&
+      navigator.onLine &&
+      !isPosCloudAuthenticationRequired()
+    )
       void unwrap<Record<string, unknown>>(
         api.get(`/pos/bootstrap?deviceId=${deviceId}`, {
           headers: { "x-pos-device-id": deviceId },
@@ -159,10 +181,15 @@ export function PosLayout() {
       });
     };
     const cloudAuthenticationRequired = () => {
-      setOnline(false);
+      setCloudAuthRequired(true);
       setDiagnostic(
         "انتهت جلسة النسخ السحابي. يستمر البيع محلياً دون توقف؛ سجّل الدخول عند توفر الإنترنت لاستئناف النسخ إلى Render.",
       );
+    };
+    const cloudAuthenticationRestored = () => {
+      setCloudAuthRequired(false);
+      setDiagnostic("تم ربط Render مجدداً. ستبدأ مزامنة العمليات المحفوظة تلقائياً.");
+      void syncNow({ retryFailed: true }).catch(() => undefined);
     };
     window.addEventListener("online", updateOnline);
     window.addEventListener("offline", updateOnline);
@@ -174,6 +201,10 @@ export function PosLayout() {
     window.addEventListener(
       "rawaqan-pos-cloud-auth-required",
       cloudAuthenticationRequired,
+    );
+    window.addEventListener(
+      "rawaqan-pos-cloud-auth-restored",
+      cloudAuthenticationRestored,
     );
     void verifyPosStorage().then((health) => {
       if (health.message) setDiagnostic(health.message);
@@ -200,6 +231,10 @@ export function PosLayout() {
       window.removeEventListener(
         "rawaqan-pos-cloud-auth-required",
         cloudAuthenticationRequired,
+      );
+      window.removeEventListener(
+        "rawaqan-pos-cloud-auth-restored",
+        cloudAuthenticationRestored,
       );
     };
   }, [expireAuthentication, isDesktop, navigate]);
@@ -293,11 +328,15 @@ export function PosLayout() {
           </span>
           <button
             disabled={syncing}
-            onClick={() => void synchronize()}
+            onClick={() =>
+              cloudAuthRequired ? reconnectCloud() : void synchronize()
+            }
             className="pos-status-badge pos-status-queue min-h-11 px-3 disabled:opacity-50"
           >
             <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
-            {syncing
+            {cloudAuthRequired
+              ? `ربط Render — ${pending} محفوظ`
+              : syncing
               ? "جارٍ المزامنة"
               : !online
                 ? `${pending} بانتظار الإنترنت`
@@ -337,6 +376,15 @@ export function PosLayout() {
                 className="min-h-11 rounded-lg bg-slate-950 px-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 تحديث آمن
+              </button>
+            )}
+            {cloudAuthRequired && (
+              <button
+                type="button"
+                onClick={reconnectCloud}
+                className="min-h-11 rounded-lg bg-amber-500 px-3 font-bold text-slate-950"
+              >
+                تسجيل الدخول ومزامنة المحفوظ
               </button>
             )}
             {diagnostic && (

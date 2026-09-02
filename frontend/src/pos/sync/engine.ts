@@ -1,4 +1,9 @@
-import { api, unwrap } from "@/lib/apiClient";
+import {
+  api,
+  isPosCloudAuthenticationRequired,
+  requirePosCloudAuthentication,
+  unwrap,
+} from "@/lib/apiClient";
 import {
   posDb,
   type LocalCategory,
@@ -44,6 +49,11 @@ interface RunSyncOptions {
 async function runSync(options: RunSyncOptions = {}) {
   const state = await posDb.deviceState.get("primary");
   if (!state) return;
+  if (isPosCloudAuthenticationRequired()) {
+    await pauseUnauthorizedOperations();
+    requirePosCloudAuthentication();
+    throw Object.assign(new Error("UNAUTHORIZED"), { code: "UNAUTHORIZED" });
+  }
   // The exclusive browser lock means any rows left in SYNCING came from an
   // interrupted tab/process. Requeue them before selecting due work.
   await recoverInterruptedOperations();
@@ -108,6 +118,17 @@ async function runSync(options: RunSyncOptions = {}) {
         code === "SYNC_CONFLICT" ||
         code === "VERSION_CONFLICT" ||
         code === "CONFLICT";
+      if (code === "UNAUTHORIZED") {
+        requirePosCloudAuthentication();
+        await posDb.syncOperations.update(operation.operationId, {
+          status: "PENDING",
+          nextAttemptAt: undefined,
+          errorCode: "UNAUTHORIZED",
+          errorMessage: posErrorMessage(error),
+        });
+        await pauseUnauthorizedOperations();
+        throw error;
+      }
       await posDb.syncOperations.update(operation.operationId, {
         status: conflict ? "CONFLICT" : "FAILED",
         nextAttemptAt: conflict
@@ -134,6 +155,17 @@ async function runSync(options: RunSyncOptions = {}) {
     restaurantName: pull.configuration.settings?.name,
   });
   scheduleDesktopBackup("cloud-sync");
+}
+
+export async function pauseUnauthorizedOperations() {
+  await posDb.syncOperations
+    .where("status")
+    .equals("FAILED")
+    .filter((operation) => operation.errorCode === "UNAUTHORIZED")
+    .modify({
+      status: "PENDING",
+      nextAttemptAt: undefined,
+    });
 }
 
 interface InvoiceIdentity {

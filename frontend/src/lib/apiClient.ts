@@ -17,10 +17,34 @@ export interface ApiErrorBody {
  * app silently calls /auth/refresh to rehydrate the session.
  */
 let accessToken: string | null = null;
+const POS_CLOUD_AUTH_REQUIRED_KEY = 'rawaqan_pos_cloud_auth_required';
+
+export function isPosCloudAuthenticationRequired() {
+  return (
+    typeof localStorage !== 'undefined' &&
+    localStorage.getItem(POS_CLOUD_AUTH_REQUIRED_KEY) === '1'
+  );
+}
+
+export function requirePosCloudAuthentication() {
+  if (typeof localStorage !== 'undefined')
+    localStorage.setItem(POS_CLOUD_AUTH_REQUIRED_KEY, '1');
+  if (typeof window !== 'undefined')
+    window.dispatchEvent(new CustomEvent('rawaqan-pos-cloud-auth-required'));
+}
+
+function clearPosCloudAuthenticationRequirement() {
+  if (typeof localStorage !== 'undefined')
+    localStorage.removeItem(POS_CLOUD_AUTH_REQUIRED_KEY);
+  if (typeof window !== 'undefined')
+    window.dispatchEvent(new CustomEvent('rawaqan-pos-cloud-auth-restored'));
+}
+
 export const tokenStore = {
   get: () => accessToken,
   set: (token: string | null) => {
     accessToken = token;
+    if (token) clearPosCloudAuthenticationRequirement();
   },
 };
 
@@ -43,11 +67,6 @@ let refreshing: Promise<string | null> | null = null;
 function notifyAuthenticationRequired() {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent('rawaqan-auth-required'));
-}
-
-function notifyPosCloudAuthenticationRequired() {
-  if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent('rawaqan-pos-cloud-auth-required'));
 }
 
 async function requestRefresh(): Promise<string | null> {
@@ -87,7 +106,7 @@ api.interceptors.response.use(
           window.rawaqanDesktop?.isDesktop &&
           original.url?.startsWith('/pos/'),
       );
-      if (standalonePosRequest) notifyPosCloudAuthenticationRequired();
+      if (standalonePosRequest) requirePosCloudAuthentication();
       else notifyAuthenticationRequired();
     }
     return Promise.reject(error);
