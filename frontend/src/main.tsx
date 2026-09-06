@@ -7,7 +7,7 @@ import { settingsService } from '@/services/settings.service';
 import { menuService } from '@/services/menu.service';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
-import { installGlobalErrorHandlers } from '@/lib/errorMonitor';
+import { initializeErrorMonitoring, installGlobalErrorHandlers } from '@/lib/errorMonitor';
 import { registerServiceWorker } from '@/lib/registerSW';
 import { App } from '@/App';
 // Self-hosted fonts (perf): same-origin, cache-friendly, no render-blocking
@@ -27,6 +27,7 @@ import '@fontsource/poppins/latin-600.css';
 import '@fontsource/poppins/latin-700.css';
 import './index.css';
 
+initializeErrorMonitoring();
 installGlobalErrorHandlers();
 registerServiceWorker();
 

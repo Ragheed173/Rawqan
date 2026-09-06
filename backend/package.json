@@ -14,6 +14,7 @@
     "test:unit": "vitest run",
     "test:integration": "node scripts/run-integration-tests.mjs",
     "test:load:readonly": "tsx scripts/load-test-readonly.ts",
+    "test:load:write": "tsx scripts/load-test-write.ts",
     "catalog:mirror-images": "tsx scripts/mirror-catalog-images.ts",
     "test:watch": "vitest",
     "db:generate": "prisma generate",
@@ -31,6 +32,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
+    "@sentry/node": "^10.73.0",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.5.1",
     "compression": "^1.7.5",

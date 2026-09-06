@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { posDb } from "../db/schema";
 import type { SyncOperation } from "../types";
 import {
@@ -10,9 +10,22 @@ import {
   applyServerPosCacheEpoch,
   reconcilePushResult,
   pauseUnauthorizedOperations,
+  checkBackendHealth,
 } from "./engine";
 
 beforeEach(async () => { posDb.close(); await posDb.delete(); await posDb.open(); });
+
+describe("POS connectivity deadline", () => {
+  it("attaches an abort deadline to the backend health request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(checkBackendHealth()).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    vi.unstubAllGlobals();
+  });
+});
 
 describe("POS sync recovery", () => {
   it("clears synchronized transaction cache when the server reset epoch advances", async () => {

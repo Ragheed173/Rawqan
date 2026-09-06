@@ -48,3 +48,22 @@ jobs:
             `Production is ready; database latency ${response.checks.database.latencyMs} ms.`,
           );
           NODE
+
+      - name: Notify the operational webhook on failure
+        if: failure()
+        env:
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+        shell: bash
+        run: |
+          if [[ -z "${ALERT_WEBHOOK_URL}" ]]; then
+            echo "ALERT_WEBHOOK_URL is not configured; GitHub failure notification remains active."
+            exit 0
+          fi
+          payload="$(jq -cn \
+            --arg text "Rawaqan production readiness failed" \
+            --arg run "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            '{text: $text, run: $run}')"
+          curl --silent --show-error --fail \
+            --connect-timeout 10 --max-time 20 \
+            -H "content-type: application/json" \
+            --data "$payload" "$ALERT_WEBHOOK_URL"

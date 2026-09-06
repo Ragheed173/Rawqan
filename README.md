@@ -117,6 +117,7 @@ Key backend vars: `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`,
 ## Documentation
 - **[docs/API_REFERENCE.md](docs/API_REFERENCE.md)** — every endpoint, auth, payloads
 - **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — production deployment + checklist
+- **[docs/PRODUCTION_MONITORING.md](docs/PRODUCTION_MONITORING.md)** — health checks, alerts, Sentry, write soak, and Windows signing
 - **[PROJECT_CHECKLIST.md](PROJECT_CHECKLIST.md)** — build status of all 21 tasks
 
 ---

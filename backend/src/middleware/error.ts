@@ -4,6 +4,7 @@ import { ZodError } from 'zod';
 import { ApiError } from '../utils/ApiError.js';
 import { isProd } from '../config/env.js';
 import { PosDomainError } from '../domain/pos/errors.js';
+import { captureBackendException } from '../lib/monitoring.js';
 
 /** Terminal error handler → uniform JSON envelope. Must be registered last. */
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
@@ -74,7 +75,13 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   }
 
   if (status >= 500) {
-     
+    captureBackendException(err, {
+      method: req.method,
+      path: req.originalUrl,
+      status,
+      code,
+    });
+
     console.error(`[${req.method} ${req.originalUrl}]`, err);
   }
 

@@ -42,6 +42,8 @@ backups/
 
 # Vite
 frontend/.vite/
+frontend/test-results/
+frontend/playwright-report/
 
 pos_offline_private.pem
 pos_offline_public.pem

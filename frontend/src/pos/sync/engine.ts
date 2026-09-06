@@ -22,6 +22,7 @@ import type {
 import { config } from "@/config/env";
 import { posErrorCode, posErrorMessage } from "../errors";
 import { scheduleDesktopBackup } from "../db/backup";
+import { reportError } from "@/lib/errorMonitor";
 
 let running: Promise<void> | null = null;
 export function syncNow(options: { retryFailed?: boolean } = {}) {
@@ -137,6 +138,15 @@ async function runSync(options: RunSyncOptions = {}) {
         errorCode: code,
         errorMessage: posErrorMessage(error),
       });
+      if (attempts >= 3 && code !== "BACKEND_UNAVAILABLE") {
+        reportError(error, {
+          area: "pos-sync",
+          operationType: operation.operationType,
+          operationId: operation.operationId,
+          attempts,
+          code,
+        });
+      }
       throw error;
     }
   }
@@ -296,6 +306,7 @@ export async function checkBackendHealth() {
     const response = await fetch(apiUrl, {
       cache: "no-store",
       credentials: "include",
+      signal: AbortSignal.timeout(config.apiTimeoutMs),
     });
     return response.ok;
   } catch {

@@ -50,6 +50,7 @@ export const tokenStore = {
 
 export const api: AxiosInstance = axios.create({
   baseURL: config.apiBaseUrl,
+  timeout: config.apiTimeoutMs,
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 });
@@ -74,7 +75,7 @@ async function requestRefresh(): Promise<string | null> {
     const res = await axios.post<{ success: true; data: { accessToken: string } }>(
       `${config.apiBaseUrl}/auth/refresh`,
       {},
-      { withCredentials: true },
+      { withCredentials: true, timeout: config.apiTimeoutMs },
     );
     const token = res.data.data.accessToken;
     tokenStore.set(token);

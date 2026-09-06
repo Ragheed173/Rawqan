@@ -1,0 +1,58 @@
+name: Disposable PostgreSQL write soak
+
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: write-soak
+  cancel-in-progress: true
+
+jobs:
+  write-soak:
+    name: Five-minute POS transaction soak
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rawaqan_write_soak_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rawaqan_write_soak_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rawaqan_write_soak_test
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/rawaqan_write_soak_test
+      JWT_ACCESS_SECRET: soak-access-secret-0123456789
+      JWT_REFRESH_SECRET: soak-refresh-secret-0123456789
+      CORS_ORIGINS: http://localhost:5173
+      PUBLIC_SITE_URL: http://localhost:5173
+      ALLOW_WRITE_LOAD_TEST: "true"
+      LOAD_TEST_DURATION_SECONDS: "300"
+      LOAD_TEST_CONCURRENCY_LEVELS: "10"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate --workspace backend
+      - name: Prepare disposable PostgreSQL database
+        run: |
+          npm run db:deploy:safe --workspace backend
+          npm run db:seed --workspace backend
+      - name: Run five-minute mixed write soak
+        run: npm run test:load:write

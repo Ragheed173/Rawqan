@@ -40,8 +40,28 @@ jobs:
       - name: Run standalone POS safety tests
         run: npm run test --workspace frontend -- src/pos/auth/PosProtectedRoute.test.tsx src/pos/auth/offline.test.ts src/pos/db/backup.test.ts src/pos/commands/localCommands.test.ts src/pos/sync/engine.test.ts src/pos/printing/ReceiptPrinter.test.ts src/pos/pages/CheckoutPage.test.tsx
 
-      - name: Build signed-ready NSIS installer
+      - name: Build NSIS installer (signed when certificate secrets exist)
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
         run: npm run dist:win --prefix desktop
+
+      - name: Verify Authenticode signature when signing is configured
+        shell: pwsh
+        env:
+          SIGNING_CONFIGURED: ${{ secrets.WINDOWS_CSC_LINK }}
+        run: |
+          $installer = Get-ChildItem desktop/release/*.exe | Select-Object -First 1
+          if (-not $installer) { throw "Desktop installer was not created." }
+          $signature = Get-AuthenticodeSignature -LiteralPath $installer.FullName
+          if ($env:SIGNING_CONFIGURED) {
+            if ($signature.Status -ne 'Valid') {
+              throw "Configured installer signature is not valid: $($signature.Status)"
+            }
+            Write-Output "Authenticode signature is valid: $($signature.SignerCertificate.Subject)"
+          } else {
+            Write-Warning "Signing secrets are absent; this CI artifact is unsigned. Configure WINDOWS_CSC_LINK and WINDOWS_CSC_KEY_PASSWORD before customer release."
+          }
 
       - name: Upload installer
         uses: actions/upload-artifact@v7

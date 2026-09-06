@@ -61,6 +61,11 @@ const envSchema = z.object({
   SEED_ADMIN_NAME: z.string().default("Rawaqan Admin"),
 
   PUBLIC_SITE_URL: z.string().url().default("http://localhost:5173"),
+
+  SENTRY_DSN: z.string().url().optional(),
+  SENTRY_ENVIRONMENT: z.string().trim().min(1).optional(),
+  SENTRY_RELEASE: z.string().trim().min(1).optional(),
+  SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0.05),
 });
 
 const parsed = envSchema.safeParse(process.env);

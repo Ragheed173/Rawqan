@@ -31,6 +31,60 @@ notifications and choose failed workflows only. Scheduled-workflow alerts go
 to the user associated with the schedule. Run the workflow manually once from
 **Actions → Production readiness → Run workflow** and confirm the green result.
 
+For immediate webhook escalation from the same workflow, add the repository
+Actions secret `ALERT_WEBHOOK_URL`. On a failed readiness run, GitHub sends a
+small JSON payload containing the repository, workflow run URL, commit, and
+failure state. Leave the secret absent if GitHub failed-workflow email is the
+only desired channel.
+
+## Application error monitoring
+
+Both the browser/desktop renderer and API have optional Sentry integration.
+They remain safe no-ops when no DSN is configured, so development and the
+standalone POS continue to work without an external monitoring account.
+
+Configure these values in Vercel for the frontend:
+
+- `VITE_SENTRY_DSN`
+- `VITE_SENTRY_ENVIRONMENT=production`
+- `VITE_APP_RELEASE` (normally the deployed commit SHA)
+- `VITE_API_TIMEOUT_MS=12000` (increase only when measurements justify it)
+
+Configure these values in Render for the backend:
+
+- `SENTRY_DSN`
+- `SENTRY_ENVIRONMENT=production`
+- `SENTRY_RELEASE` (normally the deployed commit SHA)
+- `SENTRY_TRACES_SAMPLE_RATE=0.05`
+
+The integrations do not send cookies, authorization headers, or default user
+PII. After configuration, deliberately call a nonexistent API path and use a
+controlled frontend error in staging to verify ingestion before relying on the
+alerts in production.
+
+## Scheduled write soak
+
+`.github/workflows/write-soak.yml` runs a five-minute mixed POS write test every
+day against a disposable PostgreSQL service. It exercises complete order,
+order-item, invoice, payment, and table-release transactions. The script
+refuses to run unless the database name is clearly disposable and
+`ALLOW_WRITE_LOAD_TEST=true`; never bypass this guard for production.
+
+The workflow itself is also covered by GitHub's failed-workflow email
+notifications. Inspect its latency percentiles and failure count after changes
+to database constraints, transaction code, or Prisma.
+
+## Windows installer signing
+
+The desktop installer workflow supports Authenticode signing through the
+repository Actions secrets `WINDOWS_CSC_LINK` and
+`WINDOWS_CSC_KEY_PASSWORD`. `WINDOWS_CSC_LINK` must contain the code-signing
+PFX in an electron-builder-supported form, normally a base64-encoded certificate.
+When signing is configured, CI rejects the artifact unless Windows reports a
+valid signature. Without these secrets, CI clearly warns and produces an
+unsigned test artifact; do not distribute that artifact as the customer
+release.
+
 For faster phone/SMS escalation, optionally create an HTTPS monitor in
 UptimeRobot, Better Stack, or an equivalent service:
 
