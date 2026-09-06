@@ -7,7 +7,6 @@ import {
   LayoutGrid,
   CalendarDays,
   Receipt,
-  Clock,
   AlertTriangle,
   Stethoscope,
   LayoutDashboard,
@@ -262,7 +261,6 @@ export function PosLayout() {
   const nav = [
     ["/pos", "الطاولات", LayoutGrid],
     ["/pos/reservations", "الحجوزات", CalendarDays],
-    ["/pos/shifts", "الوردية", Clock],
     ["/pos/invoices", "الفواتير", Receipt],
     ["/pos/diagnostics", "التشخيص", Stethoscope],
   ] as const;

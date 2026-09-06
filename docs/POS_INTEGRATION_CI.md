@@ -4,11 +4,12 @@ The ordinary backend suite is fast and database-free. A separate CI job now
 starts a disposable PostgreSQL 16 service and runs the real transactional POS
 suite against it on every push and pull request.
 
-Covered behavior includes opening and closing cashier shifts, table ownership,
-order creation and edits, invoice finalization, cash/change calculations,
+Covered behavior includes table ownership, order creation and edits, invoice
+finalization without a shift dependency, cash/change calculations,
 payments, refunds, split bills, offline-operation idempotency and conflicts,
 immutable financial/audit rows, reservations, catalog revisions, and database
-constraints/indexes.
+constraints/indexes. Legacy open/close-shift sync commands are retired as safe,
+successful no-ops so older installed clients cannot leave stuck operations.
 
 The integration runner refuses any database whose name does not contain
 `test`. It then destroys and recreates only the approved test database's

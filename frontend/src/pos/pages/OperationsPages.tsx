@@ -7,11 +7,9 @@ import { splitMinorEqual } from "../types";
 import { BrowserReceiptPrinter } from "../printing/ReceiptPrinter";
 import { loadReceiptData } from "../printing/receiptData";
 import {
-  closeLocalShift,
   createLocalReservation,
   finalizeLocalEqualSplit,
   finalizeLocalItemSplit,
-  openLocalShift,
   payLocalInvoice,
   recordLocalPrintEvent,
   updateLocalReservation,
@@ -630,106 +628,6 @@ export function ReservationsPage() {
           );
         })}
       </div>
-    </section>
-  );
-}
-
-export function ShiftsPage() {
-  const admin = useAuthStore((state) => state.admin);
-  const offline = usePosLive(
-    () => posDb.offlineSession.toCollection().first(),
-    undefined,
-    [],
-  );
-  const state = usePosLive(
-    () => posDb.deviceState.get("primary"),
-    undefined,
-    [],
-  );
-  const [amount, setAmount] = useState("0");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const userId = admin?.id ?? offline?.userId;
-  const shift = usePosLive(
-    () =>
-      userId && state
-        ? posDb.shifts
-            .filter(
-              (row) =>
-                row.userId === userId &&
-                row.deviceId === state.deviceId &&
-                row.status === "OPEN",
-            )
-            .first()
-        : Promise.resolve(undefined),
-    undefined,
-    [userId, state?.deviceId],
-  );
-  const submit = async () => {
-    if (!userId || busy) return;
-    setBusy(true);
-    setError("");
-    try {
-      if (shift) {
-        if (!confirm("إغلاق الوردية نهائياً بالمبلغ الفعلي المدخل؟")) return;
-        await closeLocalShift(String(shift.id), shekelInputToMinor(amount));
-      } else
-        await openLocalShift(
-          userId,
-          shekelInputToMinor(amount),
-          currentBusinessDate(state),
-        );
-      setAmount("0");
-    } catch (cause) {
-      setError(
-        posErrorMessage(cause, "تعذر حفظ الوردية. راجع المبلغ والحالة."),
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <section className="mx-auto max-w-xl rounded-2xl bg-white p-6">
-      <h1 className="text-3xl font-bold">الوردية</h1>
-      {shift ? (
-        <div className="mt-5 space-y-2">
-          <p>وردية مفتوحة</p>
-          <p>الرصيد الافتتاحي: {formatMinor(String(shift.openingCashMinor))}</p>
-          <p>
-            المبيعات النقدية: {formatMinor(String(shift.cashSalesMinor ?? "0"))}
-          </p>
-          <p>
-            المرتجعات النقدية:{" "}
-            {formatMinor(String(shift.cashRefundsMinor ?? "0"))}
-          </p>
-          <p className="font-bold">
-            النقد المتوقع: {formatMinor(String(shift.expectedCashMinor))}
-          </p>
-        </div>
-      ) : (
-        <p className="mt-5">لا توجد وردية مفتوحة.</p>
-      )}
-      <label className="mt-5 block">
-        {shift ? "النقد الفعلي عند الإغلاق" : "النقد الافتتاحي"}
-        <input
-          value={amount}
-          inputMode="decimal"
-          onChange={(event) => setAmount(normalizeShekelInput(event.target.value))}
-          className="mt-2 min-h-12 w-full rounded-xl border px-4"
-        />
-      </label>
-      {error && (
-        <p role="alert" className="mt-3 text-rose-700">
-          {error}
-        </p>
-      )}
-      <button
-        disabled={busy}
-        onClick={() => void submit()}
-        className={`mt-4 min-h-12 w-full rounded-xl font-bold text-white disabled:opacity-50 ${shift ? "bg-rose-700" : "bg-emerald-600"}`}
-      >
-        {busy ? "جارٍ الحفظ…" : shift ? "إغلاق الوردية" : "فتح الوردية"}
-      </button>
     </section>
   );
 }

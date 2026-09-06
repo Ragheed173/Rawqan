@@ -17,11 +17,8 @@ export interface PushOperation {
   dependencies: string[];
 }
 
-export function isAlreadySatisfiedSyncOutcome(
-  operationType: string,
-  errorCode: string,
-) {
-  return operationType === "CLOSE_SHIFT" && errorCode === "SHIFT_NOT_OPEN";
+export function isRetiredShiftOperation(operationType: string) {
+  return operationType === "OPEN_SHIFT" || operationType === "CLOSE_SHIFT";
 }
 
 export const SYNC_OPERATION_PERMISSIONS: Readonly<Partial<Record<string, Permission>>> = {
@@ -30,8 +27,6 @@ export const SYNC_OPERATION_PERMISSIONS: Readonly<Partial<Record<string, Permiss
   REFUND_INVOICE: "pos:refund",
   CREATE_RESERVATION: "pos:reservation:manage",
   UPDATE_RESERVATION: "pos:reservation:manage",
-  OPEN_SHIFT: "pos:shift:self",
-  CLOSE_SHIFT: "pos:shift:self",
   PRINT_EVENT: "pos:receipt:reprint",
 };
 
@@ -72,6 +67,8 @@ function parseId(payload: Record<string, unknown>) {
 async function dispatch(operation: PushOperation, actorId: string, deviceId: string, tx: Prisma.TransactionClient) {
   const context = { actorId, deviceId, operationId: operation.operationId };
   const payload = operation.payload;
+  if (isRetiredShiftOperation(operation.operationType))
+    return { disabled: true, operationType: operation.operationType };
   switch (operation.operationType) {
     case "OPEN_ORDER": return commands.openOrder(schemas.openOrderBody.parse(payload), context, tx);
     case "UPDATE_ORDER": return commands.updateOrder(parseId(payload), schemas.orderPatchBody.parse(payload), context, tx);
@@ -89,8 +86,6 @@ async function dispatch(operation: PushOperation, actorId: string, deviceId: str
     case "CREATE_PAYMENT": return commands.createPayment(schemas.uuid.parse(payload.invoiceId), schemas.paymentBody.parse(payload), context, tx);
     case "VOID_INVOICE": return commands.voidInvoice(schemas.uuid.parse(payload.invoiceId), schemas.voidBody.parse(payload), context, tx);
     case "REFUND_INVOICE": return commands.refundInvoice(schemas.uuid.parse(payload.invoiceId), schemas.refundBody.parse(payload), context, tx);
-    case "OPEN_SHIFT": return commands.openShift(schemas.openShiftBody.parse(payload), context, tx);
-    case "CLOSE_SHIFT": return commands.closeShift(parseId(payload), schemas.closeShiftBody.parse(payload), context, tx);
     case "CREATE_RESERVATION": return commands.createReservation(schemas.reservationBody.parse(payload), context, tx);
     case "UPDATE_RESERVATION": {
       const parsed = schemas.reservationPatchBody.parse(payload);
@@ -164,39 +159,6 @@ export async function pushOperations(actorId: string, deviceId: string, operatio
       }
       const code = error instanceof PosDomainError ? error.code : "FAILED";
       const message = error instanceof Error ? error.message : "Sync operation failed";
-      // A stale offline close can arrive after the authoritative shift was
-      // already closed or removed. The requested final state (not open) is
-      // already true, so treating this as a durable no-op prevents an
-      // impossible retry loop without opening or changing another shift.
-      if (isAlreadySatisfiedSyncOutcome(operation.operationType, code)) {
-        const result = toJsonSafe({
-          id: operation.payload.id,
-          status: "CLOSED",
-          alreadySatisfied: true,
-        }) as Prisma.InputJsonValue;
-        await prisma.syncOperation.upsert({
-          where: { operationId: operation.operationId },
-          create: {
-            operationId: operation.operationId,
-            deviceId,
-            localSequence: operation.localSequence,
-            requestHash: operation.requestHash,
-            operationType: operation.operationType,
-            status: "SUCCEEDED",
-            result,
-            processedAt: new Date(),
-          },
-          update: {
-            status: "SUCCEEDED",
-            result,
-            errorCode: null,
-            errorMessage: null,
-            processedAt: new Date(),
-          },
-        });
-        results.push(result);
-        continue;
-      }
       await prisma.syncOperation.upsert({ where: { operationId: operation.operationId }, create: { operationId: operation.operationId, deviceId, localSequence: operation.localSequence, requestHash: operation.requestHash, operationType: operation.operationType, status: code === "SYNC_CONFLICT" ? "CONFLICT" : "FAILED", errorCode: code, errorMessage: message, processedAt: new Date() }, update: { status: code === "SYNC_CONFLICT" ? "CONFLICT" : "FAILED", errorCode: code, errorMessage: message, processedAt: new Date() } });
       throw error;
     }
@@ -212,7 +174,7 @@ export async function pullChanges(actorId: string, deviceId: string, cursor: big
   posAssert(actor?.isActive && device?.isActive, "DEVICE_NOT_AUTHORIZED", "User or POS device is inactive");
   const changes = await prisma.catalogChange.findMany({ where: { revision: { gt: cursor } }, orderBy: { revision: "asc" }, take: limit });
   const nextCursor = changes.at(-1)?.revision ?? cursor;
-  const [settings, tables, reservations, currentShift, categories, menuItems, modifierGroups, modifierLinks] = await Promise.all([
+  const [settings, tables, reservations, categories, menuItems, modifierGroups, modifierLinks] = await Promise.all([
     prisma.restaurantSettings.findFirst({ select: { name: true, posCurrency: true, timezone: true, businessDayCutoff: true, posCacheEpoch: true, updatedAt: true } }),
     prisma.diningTable.findMany({
       orderBy: [{ sortOrder: "asc" }, { code: "asc" }],
@@ -228,11 +190,10 @@ export async function pullChanges(actorId: string, deviceId: string, cursor: big
       },
     }),
     prisma.reservation.findMany({ where: { startsAt: { gte: new Date(Date.now() - 4 * 60 * 60 * 1000) }, status: { in: ["PENDING", "CONFIRMED", "SEATED"] } }, include: { tables: true }, orderBy: { startsAt: "asc" }, take: 200 }),
-    prisma.cashierShift.findFirst({ where: { userId: actorId, deviceId, status: "OPEN" } }),
     prisma.category.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
     prisma.menuItem.findMany({ where: { isArchived: false }, orderBy: [{ categoryId: "asc" }, { sortOrder: "asc" }], include: { images: { orderBy: { sortOrder: "asc" } }, tags: { include: { tag: true } } } }),
     prisma.modifierGroup.findMany({ include: { options: { orderBy: { sortOrder: "asc" } } }, orderBy: { sortOrder: "asc" } }),
     prisma.menuItemModifierGroup.findMany({ orderBy: { sortOrder: "asc" } }),
   ]);
-  return { cursor: nextCursor, hasMore: changes.length === limit, changes, configuration: { settings, tables, reservations, currentShift, permissions: ROLE_PERMISSIONS[actor.role], catalog: { revision: nextCursor, categories, menuItems, modifierGroups, menuItemModifierGroups: modifierLinks } } };
+  return { cursor: nextCursor, hasMore: changes.length === limit, changes, configuration: { settings, tables, reservations, permissions: ROLE_PERMISSIONS[actor.role], catalog: { revision: nextCursor, categories, menuItems, modifierGroups, menuItemModifierGroups: modifierLinks } } };
 }

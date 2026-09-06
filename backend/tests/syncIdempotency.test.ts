@@ -1,19 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { isAlreadySatisfiedSyncOutcome } from "../src/modules/pos/sync.service.js";
+import { isRetiredShiftOperation } from "../src/modules/pos/sync.service.js";
 
 describe("POS sync idempotent outcomes", () => {
-  it("accepts a missing shift when replaying a close operation", () => {
-    expect(
-      isAlreadySatisfiedSyncOutcome("CLOSE_SHIFT", "SHIFT_NOT_OPEN"),
-    ).toBe(true);
+  it("retires legacy shift operations as successful no-ops", () => {
+    expect(isRetiredShiftOperation("OPEN_SHIFT")).toBe(true);
+    expect(isRetiredShiftOperation("CLOSE_SHIFT")).toBe(true);
   });
 
-  it("does not hide unrelated shift or order failures", () => {
-    expect(
-      isAlreadySatisfiedSyncOutcome("OPEN_SHIFT", "SHIFT_ALREADY_OPEN"),
-    ).toBe(false);
-    expect(
-      isAlreadySatisfiedSyncOutcome("OPEN_ORDER", "ORDER_NOT_FOUND"),
-    ).toBe(false);
+  it("does not retire operational commands", () => {
+    expect(isRetiredShiftOperation("OPEN_ORDER")).toBe(false);
+    expect(isRetiredShiftOperation("FINALIZE_INVOICE")).toBe(false);
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { allocateDiscountAcrossLines, allocateLinesEqual, calculateDiscount, calculateInvoiceTotals, splitEqual, validateQuantitySplits } from "../src/domain/pos/billing.js";
 import { addRational, compareRational, reduceRational } from "../src/domain/pos/rational.js";
-import { hashOperationRequest, reconcileShift, reservationsOverlap } from "../src/domain/pos/operations.js";
+import { hashOperationRequest, reservationsOverlap } from "../src/domain/pos/operations.js";
 import { validatePayments, validateRefund } from "../src/domain/pos/payments.js";
 import { priceOrderLine } from "../src/domain/pos/pricing.js";
 import { assertInvoiceTransition, assertOrderTransition, invoiceStatusForRefund } from "../src/domain/pos/stateMachines.js";
@@ -98,7 +98,7 @@ describe("POS billing and payments", () => {
   });
 });
 
-describe("POS state, shifts, reservations, and idempotency", () => {
+describe("POS state, reservations, and idempotency", () => {
   it("enforces explicit order and invoice transitions", () => {
     expect(() => assertOrderTransition("OPEN", "BILL_REQUESTED")).not.toThrow();
     expect(() => assertOrderTransition("CLOSED", "OPEN")).toThrow("cannot transition");
@@ -106,10 +106,6 @@ describe("POS state, shifts, reservations, and idempotency", () => {
     expect(() => assertInvoiceTransition("VOIDED", "PAID")).toThrow("cannot transition");
     expect(invoiceStatusForRefund(100n, 99n)).toBe("PARTIALLY_REFUNDED");
     expect(invoiceStatusForRefund(100n, 100n)).toBe("REFUNDED");
-  });
-
-  it("reconciles expected and actual shift cash exactly", () => {
-    expect(reconcileShift(1000n, 5000n, 750n, 5200n)).toEqual({ expectedCashMinor: 5250n, differenceMinor: -50n });
   });
 
   it("uses half-open reservation overlap semantics", () => {

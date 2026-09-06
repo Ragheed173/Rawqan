@@ -18,7 +18,6 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
     const conflict = new Set([
       'TABLE_OCCUPIED',
       'VERSION_CONFLICT',
-      'SHIFT_ALREADY_OPEN',
       'ALREADY_APPLIED',
       'SYNC_CONFLICT',
       'SYNC_SEQUENCE_CONFLICT',

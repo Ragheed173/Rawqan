@@ -51,11 +51,6 @@ const ReservationsPage = lazy(() =>
     default: m.ReservationsPage,
   })),
 );
-const ShiftsPage = lazy(() =>
-  import("@/pos/pages/OperationsPages").then((m) => ({
-    default: m.ShiftsPage,
-  })),
-);
 const InvoicesPage = lazy(() =>
   import("@/pos/pages/OperationsPages").then((m) => ({
     default: m.InvoicesPage,
@@ -159,7 +154,6 @@ export function App() {
               <Route path="checkout/:orderId" element={<PosCheckoutPage />} />
               <Route path="split/:orderId" element={<SplitPage />} />
               <Route path="reservations" element={<ReservationsPage />} />
-              <Route path="shifts" element={<ShiftsPage />} />
               <Route path="invoices" element={<InvoicesPage />} />
               <Route path="invoices/:id" element={<InvoiceDetailPage />} />
               <Route path="diagnostics" element={<PosDiagnostics />} />

@@ -73,6 +73,12 @@ export async function restoreDesktopBackup() {
       const rows = selected.snapshot.tables[table.name];
       if (rows.length > 0) await table.bulkPut(rows);
     }
+    await posDb.syncOperations
+      .filter((operation) =>
+        ["OPEN_SHIFT", "CLOSE_SHIFT"].includes(operation.operationType),
+      )
+      .delete();
+    await posDb.shifts.clear();
   });
   return {
     canceled: false as const,

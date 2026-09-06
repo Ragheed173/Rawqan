@@ -24,7 +24,6 @@ export const PERMISSIONS = [
   "pos:refund",
   "pos:receipt:reprint",
   "pos:reservation:manage",
-  "pos:shift:self",
   "pos:reports:read",
   "pos:audit:read",
   "pos:device:manage",
@@ -50,7 +49,6 @@ const CASHIER: Permission[] = [
   "pos:operate",
   "pos:receipt:reprint",
   "pos:reservation:manage",
-  "pos:shift:self",
 ];
 
 export const ROLE_PERMISSIONS: Record<AdminRole, readonly Permission[]> = {

@@ -226,14 +226,6 @@ describe("local-first POS commands", () => {
       unitPriceMinor: priced.unitPriceMinor,
       quantity: 1,
     });
-    await posDb.shifts.put({
-      id: "shift",
-      userId: "admin",
-      deviceId: "11111111-1111-4111-8111-111111111111",
-      status: "OPEN",
-      openingCashMinor: "0",
-      expectedCashMinor: "0",
-    });
     const { result: invoice } = await checkoutLocal({
       orderId,
       userId: "admin",
@@ -303,15 +295,6 @@ describe("local-first POS commands", () => {
 
   it("pays split siblings locally and closes the order only after the last share", async () => {
     const orderId = await equalOrder(1, "3000");
-    await posDb.shifts.put({
-      id: "split-shift",
-      userId: "admin",
-      deviceId: "11111111-1111-4111-8111-111111111111",
-      status: "OPEN",
-      openingCashMinor: "0",
-      cashSalesMinor: "0",
-      expectedCashMinor: "0",
-    });
     const { result } = await finalizeLocalEqualSplit({
       orderId,
       userId: "admin",

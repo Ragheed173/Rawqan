@@ -8,7 +8,6 @@ export async function bootstrap(actorId: string, deviceId: string) {
     actor,
     device,
     settings,
-    shift,
     tables,
     categories,
     menuItems,
@@ -33,9 +32,6 @@ export async function bootstrap(actorId: string, deviceId: string) {
         posCacheEpoch: true,
         updatedAt: true,
       },
-    }),
-    prisma.cashierShift.findFirst({
-      where: { userId: actorId, deviceId, status: "OPEN" },
     }),
     prisma.diningTable.findMany({
       orderBy: [{ sortOrder: "asc" }, { code: "asc" }],
@@ -98,7 +94,6 @@ export async function bootstrap(actorId: string, deviceId: string) {
     ).toString(),
     user: { ...actor, permissions: ROLE_PERMISSIONS[actor.role] },
     settings,
-    currentShift: shift,
     tables,
     catalog: {
       revision: catalogRevision,

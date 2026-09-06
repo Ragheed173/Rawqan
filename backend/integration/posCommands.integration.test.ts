@@ -5,14 +5,12 @@ import {
   addOrderItem,
   applyOrderDiscount,
   cancelOrder,
-  closeShift,
   createPayment,
   createReservation,
   finalizeEqualSplit,
   finalizeInvoice,
   mergeOrders,
   openOrder,
-  openShift,
   refundInvoice,
   transferOrder,
   updateReservation,
@@ -34,7 +32,6 @@ beforeAll(async () => {
   const item = await prisma.menuItem.create({ data: { categoryId: category.id, slug: `item-${suffix}`, name: "Burger", price: "25.00" } });
   fixture.actorId = actor.id; fixture.deviceId = device.id; fixture.menuItemId = item.id;
   fixture.categoryId = category.id;
-  await openShift({ openingCashMinor: 1000n }, { actorId: actor.id, deviceId: device.id });
 });
 
 async function orderWithItem() {
@@ -95,28 +92,6 @@ describe("transactional POS commands on PostgreSQL", () => {
 
     expect((await prisma.order.findUniqueOrThrow({ where: { id: orderId } })).status).toBe("CANCELLED");
     expect((await prisma.diningTable.findUniqueOrThrow({ where: { id: table.id } })).status).toBe("AVAILABLE");
-  });
-
-  it("replays the same offline shift open and close without duplicating state", async () => {
-    const suffix = randomUUID();
-    const [actor, device] = await Promise.all([
-      prisma.admin.create({ data: { email: `shift-${suffix}@test.local`, passwordHash: "not-used", name: "Shift Replay Test", role: "SUPER_ADMIN" } }),
-      prisma.posDevice.create({ data: { code: `R${suffix.slice(0, 6)}`, name: "Shift Replay Test" } }),
-    ]);
-    const context = { actorId: actor.id, deviceId: device.id };
-    const shiftId = randomUUID();
-    const opened = await openShift({ id: shiftId, openingCashMinor: 2500n }, context);
-    const replayedOpen = await openShift({ id: shiftId, openingCashMinor: 2500n }, context);
-    expect(replayedOpen.id).toBe(opened.id);
-    expect(await prisma.cashierShift.count({ where: { userId: actor.id, deviceId: device.id } })).toBe(1);
-    await expect(openShift({ id: shiftId, openingCashMinor: 2600n }, context)).rejects.toMatchObject({ code: "SYNC_CONFLICT" });
-    await expect(openShift({ id: randomUUID(), openingCashMinor: 2500n }, context)).rejects.toMatchObject({ code: "SHIFT_ALREADY_OPEN" });
-
-    const closed = await closeShift(shiftId, { actualClosingCashMinor: 2500n }, context);
-    const replayedClose = await closeShift(shiftId, { actualClosingCashMinor: 2500n }, context);
-    expect(replayedClose.id).toBe(closed.id);
-    expect(replayedClose.status).toBe("CLOSED");
-    await expect(closeShift(shiftId, { actualClosingCashMinor: 2600n }, context)).rejects.toMatchObject({ code: "SYNC_CONFLICT" });
   });
 
   it("finalizes an immutable cash invoice and releases its table", async () => {
@@ -259,27 +234,24 @@ describe("transactional POS commands on PostgreSQL", () => {
     expect((await prisma.invoice.findUniqueOrThrow({ where: { id: invoice.id } })).status).toBe("VOIDED");
   });
 
-  it("keeps Visa out of drawer cash and reverses only the cash part of a full split-payment refund", async () => {
+  it("records mixed cash and Visa payments and refunds the invoice", async () => {
     const visaOrder = await orderWithItem();
     const visaInvoice = await finalizeInvoice({ orderId: visaOrder.orderId, expectedVersion: 2, payments: [{ method: "VISA", amountMinor: 5000n }] }, fixture);
     expect(visaInvoice.status).toBe("PAID");
 
-    const shiftBefore = await prisma.cashierShift.findFirstOrThrow({ where: { userId: fixture.actorId, deviceId: fixture.deviceId, status: "OPEN" } });
     const mixedOrder = await orderWithItem();
     const mixedInvoice = await finalizeInvoice({ orderId: mixedOrder.orderId, expectedVersion: 2, payments: [
       { method: "CASH", amountMinor: 2000n, tenderedMinor: 2500n },
       { method: "VISA", amountMinor: 3000n },
     ] }, fixture);
-    const shiftAfterSale = await prisma.cashierShift.findFirstOrThrow({ where: { id: shiftBefore.id } });
-    expect(shiftAfterSale.expectedCashMinor - shiftBefore.expectedCashMinor).toBe(2000n);
+    expect(mixedInvoice.payments.map((payment) => [payment.method, payment.amountMinor])).toEqual([
+      ["CASH", 2000n],
+      ["VISA", 3000n],
+    ]);
 
     await refundInvoice(mixedInvoice.id, { amountMinor: 5000n, reason: "RC full refund" }, fixture);
-    const [refunded, shiftAfterRefund] = await Promise.all([
-      prisma.invoice.findUniqueOrThrow({ where: { id: mixedInvoice.id } }),
-      prisma.cashierShift.findFirstOrThrow({ where: { id: shiftBefore.id } }),
-    ]);
+    const refunded = await prisma.invoice.findUniqueOrThrow({ where: { id: mixedInvoice.id } });
     expect(refunded.status).toBe("REFUNDED");
-    expect(shiftAfterRefund.expectedCashMinor).toBe(shiftBefore.expectedCashMinor);
   });
 
   it("creates, seats, and cancels a table reservation with optimistic versions", async () => {
@@ -292,10 +264,4 @@ describe("transactional POS commands on PostgreSQL", () => {
     expect(cancelled.status).toBe("CANCELLED");
   });
 
-  it("closes the RC cashier shift with an exact zero drawer difference", async () => {
-    const shift = await prisma.cashierShift.findFirstOrThrow({ where: { userId: fixture.actorId, deviceId: fixture.deviceId, status: "OPEN" } });
-    const closed = await closeShift(shift.id, { actualClosingCashMinor: shift.expectedCashMinor }, fixture);
-    expect(closed.status).toBe("CLOSED");
-    expect(closed.differenceMinor).toBe(0n);
-  });
 });

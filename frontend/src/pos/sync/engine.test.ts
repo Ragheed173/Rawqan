@@ -5,7 +5,6 @@ import type { SyncOperation } from "../types";
 import {
   orderDueOperations,
   applyBootstrap,
-  reconcileCurrentShift,
   reconcileLocalSequence,
   recoverInterruptedOperations,
   applyServerPosCacheEpoch,
@@ -196,12 +195,12 @@ describe("POS sync recovery", () => {
     });
     await posDb.syncOperations.bulkPut([
       {
-        operationId: "open-shift",
+        operationId: "open-order",
         deviceId: "device",
         localSequence: "1",
         requestHash: "hash-1",
-        operationType: "OPEN_SHIFT",
-        payload: { id: "shift" },
+        operationType: "OPEN_ORDER",
+        payload: { id: "order" },
         dependencies: [],
         status: "FAILED",
         attempts: 5,
@@ -209,12 +208,12 @@ describe("POS sync recovery", () => {
         createdAt: new Date().toISOString(),
       },
       {
-        operationId: "close-shift",
+        operationId: "add-item",
         deviceId: "device",
         localSequence: "2",
         requestHash: "hash-2",
-        operationType: "CLOSE_SHIFT",
-        payload: { id: "shift" },
+        operationType: "ADD_ORDER_ITEM",
+        payload: { id: "item" },
         dependencies: [],
         status: "FAILED",
         attempts: 1,
@@ -239,8 +238,8 @@ describe("POS sync recovery", () => {
           code: operation.errorCode,
         })),
     ).toEqual([
-      { id: "open-shift", sequence: "5", status: "PENDING", code: undefined },
-      { id: "close-shift", sequence: "6", status: "PENDING", code: undefined },
+      { id: "open-order", sequence: "5", status: "PENDING", code: undefined },
+      { id: "add-item", sequence: "6", status: "PENDING", code: undefined },
     ]);
   });
 
@@ -248,6 +247,14 @@ describe("POS sync recovery", () => {
     await posDb.syncOperations.put({ operationId: "op", deviceId: "device", localSequence: "1", requestHash: "hash", operationType: "OPEN_ORDER", payload: {}, dependencies: [], status: "SYNCING", attempts: 1, createdAt: new Date().toISOString() });
     await recoverInterruptedOperations();
     expect(await posDb.syncOperations.get("op")).toMatchObject({ status: "FAILED", errorCode: "SYNC_INTERRUPTED", nextAttemptAt: expect.any(String) });
+  });
+
+  it("removes retired shift state and operations during startup recovery", async () => {
+    await posDb.shifts.put({ id: "legacy-shift", status: "OPEN" });
+    await posDb.syncOperations.put({ operationId: "legacy-open-shift", deviceId: "device", localSequence: "1", requestHash: "hash", operationType: "OPEN_SHIFT", payload: {}, dependencies: [], status: "FAILED", attempts: 11, createdAt: new Date().toISOString() });
+    await recoverInterruptedOperations();
+    expect(await posDb.shifts.count()).toBe(0);
+    expect(await posDb.syncOperations.get("legacy-open-shift")).toBeUndefined();
   });
 
   it("pauses unauthorized failures without deleting or repeatedly retrying them", async () => {
@@ -342,46 +349,7 @@ describe("POS sync recovery", () => {
     });
   });
 
-  it("removes a stale local open shift when the server has none", async () => {
-    await posDb.shifts.put({
-      id: "stale-shift",
-      userId: "cashier",
-      deviceId: "device",
-      status: "OPEN",
-      openingCashMinor: "0",
-      expectedCashMinor: "0",
-    });
-    await reconcileCurrentShift(null);
-    expect(await posDb.shifts.get("stale-shift")).toBeUndefined();
-  });
-
-  it("keeps an offline shift that still has an unsynced OPEN_SHIFT operation", async () => {
-    await posDb.shifts.put({
-      id: "offline-shift",
-      userId: "cashier",
-      deviceId: "device",
-      status: "OPEN",
-      openingCashMinor: "0",
-      expectedCashMinor: "0",
-    });
-    await posDb.syncOperations.put({
-      operationId: "open-shift-op",
-      deviceId: "device",
-      localSequence: "2",
-      requestHash: "hash",
-      operationType: "OPEN_SHIFT",
-      payload: { id: "offline-shift", openingCashMinor: "0" },
-      dependencies: [],
-      status: "FAILED",
-      attempts: 1,
-      errorCode: "BACKEND_UNAVAILABLE",
-      createdAt: new Date().toISOString(),
-    });
-    await reconcileCurrentShift(null);
-    expect(await posDb.shifts.get("offline-shift")).toBeDefined();
-  });
-
-  it("sends a replacement OPEN_SHIFT before an older payment blocked by SHIFT_REQUIRED", () => {
+  it("keeps operations in their local sequence order", () => {
     const base = {
       deviceId: "device",
       requestHash: "hash",
@@ -391,23 +359,23 @@ describe("POS sync recovery", () => {
       attempts: 1,
       createdAt: new Date().toISOString(),
     };
-    const blocked = {
+    const later = {
       ...base,
       operationId: "payment",
       localSequence: "3",
       operationType: "FINALIZE_INVOICE",
-      errorCode: "SHIFT_REQUIRED",
     };
-    const openShift = {
+    const earlier = {
       ...base,
-      operationId: "shift",
+      operationId: "order",
       localSequence: "4",
-      operationType: "OPEN_SHIFT",
+      operationType: "OPEN_ORDER",
       status: "PENDING" as const,
     };
-    expect(orderDueOperations([blocked, openShift])).toEqual([
-      openShift,
-      blocked,
+    earlier.localSequence = "2";
+    expect(orderDueOperations([later, earlier])).toEqual([
+      earlier,
+      later,
     ]);
   });
 });

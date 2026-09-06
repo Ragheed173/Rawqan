@@ -7,7 +7,7 @@ import { decimalToMinorUnits, sumMinorUnits } from "../../domain/money.js";
 import { allocateDiscountAcrossLines, allocateLinesToTargets, calculateInvoiceTotals, splitEqual, type DiscountRequest } from "../../domain/pos/billing.js";
 import { posAssert } from "../../domain/pos/errors.js";
 import { addRational, compareRational, reduceRational, type RationalQuantity } from "../../domain/pos/rational.js";
-import { assertReservation, reconcileShift } from "../../domain/pos/operations.js";
+import { assertReservation } from "../../domain/pos/operations.js";
 import { validatePayments, validateRefund, type PaymentAllocation } from "../../domain/pos/payments.js";
 import { priceOrderLine, type ModifierGroupRule, type SelectedModifier } from "../../domain/pos/pricing.js";
 import { assertOrderTransition, invoiceStatusForRefund } from "../../domain/pos/stateMachines.js";
@@ -541,14 +541,10 @@ export function finalizeInvoice(input: FinalizeInvoiceInput, context: PosActorCo
     if (input.payments?.length) {
       const validated = validatePayments(invoice.totalMinor, input.payments, false);
       allocatedMinor = validated.allocatedMinor;
-      const shift = await tx.cashierShift.findFirst({ where: { userId: actor.id, deviceId: device.id, status: "OPEN" } });
-      posAssert(shift, "SHIFT_REQUIRED", "An open cashier shift is required before payment");
       for (const [index, payment] of validated.payments.entries()) {
         const created = await tx.payment.create({ data: { id: input.payments[index]?.id, invoiceId: invoice.id, method: payment.method, amountMinor: payment.amountMinor, tenderedMinor: payment.method === "CASH" ? payment.tenderedMinor : null, changeMinor: payment.changeMinor, actorId: actor.id, actorNameSnapshot: actor.name, actorRoleSnapshot: actor.role, deviceId: device.id } });
         await writeActivity({ ...actorAudit(actor), action: "PAYMENT_CREATED", entityType: "Payment", entityId: created.id, deviceId: device.id, operationId: context.operationId, afterData: { invoiceId: invoice.id, method: created.method, amountMinor: created.amountMinor.toString() } }, tx);
       }
-      const cashMinor = sumMinorUnits(validated.payments.filter((payment) => payment.method === "CASH").map((payment) => payment.amountMinor));
-      if (cashMinor > 0n) await tx.cashierShift.update({ where: { id: shift.id }, data: { cashSalesMinor: { increment: cashMinor }, expectedCashMinor: { increment: cashMinor } } });
     }
     const paid = allocatedMinor === invoice.totalMinor;
     if (paid) await tx.invoice.update({ where: { id: invoice.id }, data: { status: "PAID", paidAt: new Date() } });
@@ -669,14 +665,10 @@ export function finalizeEqualSplit(input: FinalizeEqualSplitInput, context: PosA
       if (request?.payments?.length) {
         const validated = validatePayments(invoice.totalMinor, request.payments, false);
         allocatedMinor = validated.allocatedMinor;
-        const shift = await tx.cashierShift.findFirst({ where: { userId: actor.id, deviceId: device.id, status: "OPEN" } });
-        posAssert(shift, "SHIFT_REQUIRED", "An open cashier shift is required before payment");
         for (const [paymentIndex, payment] of validated.payments.entries()) {
           const created = await tx.payment.create({ data: { id: request.payments[paymentIndex]?.id, invoiceId: invoice.id, method: payment.method, amountMinor: payment.amountMinor, tenderedMinor: payment.method === "CASH" ? payment.tenderedMinor : null, changeMinor: payment.changeMinor, actorId: actor.id, actorNameSnapshot: actor.name, actorRoleSnapshot: actor.role, deviceId: device.id } });
           await writeActivity({ ...actorAudit(actor), action: "PAYMENT_CREATED", entityType: "Payment", entityId: created.id, deviceId: device.id, operationId: context.operationId, afterData: { invoiceId: invoice.id, method: created.method, amountMinor: created.amountMinor.toString() } }, tx);
         }
-        const cashMinor = sumMinorUnits(validated.payments.filter((payment) => payment.method === "CASH").map((payment) => payment.amountMinor));
-        if (cashMinor > 0n) await tx.cashierShift.update({ where: { id: shift.id }, data: { cashSalesMinor: { increment: cashMinor }, expectedCashMinor: { increment: cashMinor } } });
       }
       const paid = allocatedMinor === invoice.totalMinor;
       allPaid = allPaid && paid;
@@ -725,8 +717,6 @@ export function createPayment(invoiceId: string, input: CreatePaymentInput, cont
     const alreadyPaid = sumMinorUnits(invoice.payments.filter((payment) => payment.status === "COMPLETED").map((payment) => payment.amountMinor));
     const due = invoice.totalMinor - alreadyPaid;
     const validated = validatePayments(due, [input], false);
-    const shift = await tx.cashierShift.findFirst({ where: { userId: actor.id, deviceId: device.id, status: "OPEN" } });
-    posAssert(shift, "SHIFT_REQUIRED", "An open cashier shift is required before payment");
     const payment = validated.payments[0]!;
     const created = await tx.payment.create({ data: {
       id: input.id,
@@ -740,7 +730,6 @@ export function createPayment(invoiceId: string, input: CreatePaymentInput, cont
       actorRoleSnapshot: actor.role,
       deviceId: device.id,
     } });
-    if (payment.method === "CASH") await tx.cashierShift.update({ where: { id: shift.id }, data: { cashSalesMinor: { increment: payment.amountMinor }, expectedCashMinor: { increment: payment.amountMinor } } });
     const fullyPaid = alreadyPaid + payment.amountMinor === invoice.totalMinor;
     if (fullyPaid) {
       await tx.invoice.update({ where: { id: invoiceId }, data: { status: "PAID", paidAt: new Date() } });
@@ -853,56 +842,12 @@ export function refundInvoice(invoiceId: string, input: RefundInvoiceInput, cont
     }, include: { lines: true, payments: true } });
     const cumulative = invoice.refundedMinor + input.amountMinor;
     await tx.invoice.update({ where: { id: invoiceId }, data: { refundedMinor: cumulative, status: invoiceStatusForRefund(invoice.totalMinor, cumulative) } });
-    let cashRefundMinor = 0n;
     for (const allocation of paymentAllocations) {
       const source = availablePayments.find(({ payment }) => payment.id === allocation.paymentId)!;
-      if (source.payment.method === "CASH") cashRefundMinor += allocation.amountMinor;
       if (allocation.amountMinor === source.available) await tx.payment.update({ where: { id: source.payment.id }, data: { status: "REFUNDED" } });
-    }
-    if (cashRefundMinor > 0n) {
-      const shift = await tx.cashierShift.findFirst({ where: { userId: actor.id, deviceId: device.id, status: "OPEN" } });
-      posAssert(shift, "SHIFT_REQUIRED", "An open shift is required for a cash refund");
-      posAssert(shift.expectedCashMinor >= cashRefundMinor, "INVALID_PAYMENT_TOTAL", "Cash refund exceeds expected drawer cash");
-      await tx.cashierShift.update({ where: { id: shift.id }, data: { cashRefundsMinor: { increment: cashRefundMinor }, expectedCashMinor: { decrement: cashRefundMinor } } });
     }
     await writeActivity({ ...actorAudit(actor), action: "REFUND_CREATED", entityType: "Refund", entityId: refund.id, deviceId: device.id, operationId: context.operationId, reason: input.reason, afterData: { invoiceId, amountMinor: input.amountMinor.toString(), cumulativeRefundedMinor: cumulative.toString() } }, tx);
     return refund;
-  }, existingTx);
-}
-
-export function openShift(input: { id?: string; openingCashMinor: bigint }, context: PosActorContext, existingTx?: PosTx) {
-  return inTransaction(async (tx) => {
-    const { actor, device } = await loadContext(tx, context);
-    posAssert(input.openingCashMinor >= 0n, "INVALID_PAYMENT_TOTAL", "Opening cash cannot be negative");
-    const current = await tx.cashierShift.findFirst({ where: { userId: actor.id, deviceId: device.id, status: "OPEN" } });
-    // Offline delivery is at-least-once. If the exact client-reserved shift was
-    // already opened, its desired state is satisfied and the retry is safe.
-    if (current && input.id === current.id) {
-      posAssert(current.openingCashMinor === input.openingCashMinor, "SYNC_CONFLICT", "Repeated shift open has different opening cash");
-      return current;
-    }
-    posAssert(!current, "SHIFT_ALREADY_OPEN", "A shift is already open for this cashier and device");
-    const shift = await tx.cashierShift.create({ data: { id: input.id, userId: actor.id, userNameSnapshot: actor.name, userRoleSnapshot: actor.role, deviceId: device.id, businessDate: await getBusinessDate(tx), openingCashMinor: input.openingCashMinor, expectedCashMinor: input.openingCashMinor } });
-    await writeActivity({ ...actorAudit(actor), action: "SHIFT_OPENED", entityType: "CashierShift", entityId: shift.id, deviceId: device.id, operationId: context.operationId, afterData: { openingCashMinor: shift.openingCashMinor.toString() } }, tx);
-    return shift;
-  }, existingTx);
-}
-
-export function closeShift(shiftId: string, input: { actualClosingCashMinor: bigint }, context: PosActorContext, existingTx?: PosTx) {
-  return inTransaction(async (tx) => {
-    const { actor, device } = await loadContext(tx, context);
-    const shift = await tx.cashierShift.findUnique({ where: { id: shiftId } });
-    posAssert(shift && shift.userId === actor.id && shift.deviceId === device.id, "SHIFT_NOT_OPEN", "Open shift not found for this cashier/device");
-    // A repeated offline close for the same shift is also already fulfilled.
-    if (shift.status === "CLOSED") {
-      posAssert(shift.actualClosingCashMinor === input.actualClosingCashMinor, "SYNC_CONFLICT", "Repeated shift close has different actual cash");
-      return shift;
-    }
-    posAssert(shift.status === "OPEN", "SHIFT_NOT_OPEN", "Open shift not found for this cashier/device");
-    const reconciliation = reconcileShift(shift.openingCashMinor, shift.cashSalesMinor, shift.cashRefundsMinor, input.actualClosingCashMinor);
-    const closed = await tx.cashierShift.update({ where: { id: shiftId }, data: { status: "CLOSED", expectedCashMinor: reconciliation.expectedCashMinor, actualClosingCashMinor: input.actualClosingCashMinor, differenceMinor: reconciliation.differenceMinor, closedAt: new Date() } });
-    await writeActivity({ ...actorAudit(actor), action: "SHIFT_CLOSED", entityType: "CashierShift", entityId: shift.id, deviceId: device.id, operationId: context.operationId, beforeData: { status: shift.status }, afterData: { status: closed.status, expectedCashMinor: closed.expectedCashMinor.toString(), actualClosingCashMinor: input.actualClosingCashMinor.toString(), differenceMinor: reconciliation.differenceMinor!.toString() } }, tx);
-    return closed;
   }, existingTx);
 }
 

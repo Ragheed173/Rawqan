@@ -234,43 +234,33 @@ export async function reconcilePushResult(
 }
 
 export function orderDueOperations(operations: SyncOperation[]) {
-  const ordered = [...operations].sort((a, b) =>
+  return [...operations].sort((a, b) =>
     BigInt(a.localSequence) < BigInt(b.localSequence) ? -1 : 1,
   );
-  const blockedPaymentIndex = ordered.findIndex(
-    (operation) => operation.errorCode === "SHIFT_REQUIRED",
-  );
-  const pendingOpenShiftIndex = ordered.findIndex(
-    (operation, index) =>
-      index > blockedPaymentIndex && operation.operationType === "OPEN_SHIFT",
-  );
-  const hasInterveningClose = ordered.some(
-    (operation, index) =>
-      index > blockedPaymentIndex &&
-      index < pendingOpenShiftIndex &&
-      operation.operationType === "CLOSE_SHIFT",
-  );
-  if (
-    blockedPaymentIndex >= 0 &&
-    pendingOpenShiftIndex > blockedPaymentIndex &&
-    !hasInterveningClose
-  ) {
-    const [openShift] = ordered.splice(pendingOpenShiftIndex, 1);
-    ordered.splice(blockedPaymentIndex, 0, openShift!);
-  }
-  return ordered;
 }
 
 export async function recoverInterruptedOperations() {
-  await posDb.syncOperations
-    .where("status")
-    .equals("SYNCING")
-    .modify({
-      status: "FAILED",
-      nextAttemptAt: new Date().toISOString(),
-      errorCode: "SYNC_INTERRUPTED",
-      errorMessage: "Previous sync was interrupted and safely requeued",
-    });
+  await posDb.transaction(
+    "rw",
+    [posDb.syncOperations, posDb.shifts],
+    async () => {
+      await posDb.syncOperations
+        .filter((operation) =>
+          ["OPEN_SHIFT", "CLOSE_SHIFT"].includes(operation.operationType),
+        )
+        .delete();
+      await posDb.shifts.clear();
+      await posDb.syncOperations
+        .where("status")
+        .equals("SYNCING")
+        .modify({
+          status: "FAILED",
+          nextAttemptAt: new Date().toISOString(),
+          errorCode: "SYNC_INTERRUPTED",
+          errorMessage: "Previous sync was interrupted and safely requeued",
+        });
+    },
+  );
 }
 
 function wire(operation: SyncOperation) {
@@ -396,7 +386,6 @@ interface PullResponse {
       version: number;
       tables?: { tableId: string }[];
     }[];
-    currentShift?: ({ id: string } & Record<string, unknown>) | null;
   };
 }
 
@@ -465,7 +454,6 @@ async function applyPulledOperations(
       posDb.orderItems,
       posDb.orderItemModifiers,
       posDb.reservations,
-      posDb.shifts,
       posDb.syncOperations,
     ],
     async () => {
@@ -488,7 +476,6 @@ async function applyPulledOperations(
           })),
         );
       }
-      await reconcileCurrentShift(configuration.currentShift);
     },
   );
 }
@@ -617,45 +604,6 @@ async function reconcileActiveOrders(tables: WireTable[]) {
   }
 }
 
-export async function reconcileCurrentShift(
-  currentShift: ({ id: string } & Record<string, unknown>) | null | undefined,
-) {
-  const openShifts = await posDb.shifts
-    .where("status")
-    .equals("OPEN")
-    .toArray();
-  if (currentShift) {
-    const staleIds = openShifts
-      .filter((shift) => shift.id !== currentShift.id)
-      .map((shift) => shift.id);
-    if (staleIds.length) await posDb.shifts.bulkDelete(staleIds);
-    await posDb.shifts.put(currentShift);
-    return;
-  }
-
-  const unsyncedOpenShiftIds = new Set(
-    (
-      await posDb.syncOperations
-        .where("status")
-        .anyOf("PENDING", "SYNCING", "FAILED")
-        .filter(
-          (operation) =>
-            operation.operationType === "OPEN_SHIFT" &&
-            operation.errorCode !== "SHIFT_ALREADY_OPEN" &&
-            operation.errorCode !== "PERMISSION_DENIED" &&
-            operation.errorCode !== "DEVICE_NOT_AUTHORIZED",
-        )
-        .toArray()
-    )
-      .map((operation) => operation.payload.id)
-      .filter((id): id is string => typeof id === "string"),
-  );
-  const staleIds = openShifts
-    .filter((shift) => !unsyncedOpenShiftIds.has(shift.id))
-    .map((shift) => shift.id);
-  if (staleIds.length) await posDb.shifts.bulkDelete(staleIds);
-}
-
 export async function reconcileLocalSequence(
   deviceId: string,
   serverNextLocalSequence: string,
@@ -713,7 +661,6 @@ export async function applyBootstrap(data: {
     businessDayCutoff?: string;
     posCacheEpoch?: number;
   };
-  currentShift?: ({ id: string } & Record<string, unknown>) | null;
   reservations?: {
     id: string;
     customerName: string;
@@ -764,7 +711,6 @@ export async function applyBootstrap(data: {
       posDb.orderItems,
       posDb.orderItemModifiers,
       posDb.reservations,
-      posDb.shifts,
       posDb.syncOperations,
       posDb.deviceState,
     ],
@@ -831,7 +777,6 @@ export async function applyBootstrap(data: {
               [],
           })),
         );
-      await reconcileCurrentShift(data.currentShift);
       const current = await posDb.deviceState.get("primary");
       const nextLocalSequence = data.nextLocalSequence
         ? await reconcileLocalSequence(data.device.id, data.nextLocalSequence)

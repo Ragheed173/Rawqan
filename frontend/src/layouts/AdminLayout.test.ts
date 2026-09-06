@@ -6,7 +6,6 @@ const cashier: Permission[] = [
   "pos:operate",
   "pos:receipt:reprint",
   "pos:reservation:manage",
-  "pos:shift:self",
 ];
 
 describe("admin route permissions", () => {

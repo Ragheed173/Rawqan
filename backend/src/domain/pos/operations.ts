@@ -1,15 +1,6 @@
 import { createHash } from "node:crypto";
 import { posAssert } from "./errors.js";
 
-export function reconcileShift(openingCashMinor: bigint, cashSalesMinor: bigint, cashRefundsMinor: bigint, actualClosingCashMinor?: bigint) {
-  posAssert(openingCashMinor >= 0n && cashSalesMinor >= 0n && cashRefundsMinor >= 0n, "INVALID_PAYMENT_TOTAL", "Shift cash values cannot be negative");
-  const expectedCashMinor = openingCashMinor + cashSalesMinor - cashRefundsMinor;
-  posAssert(expectedCashMinor >= 0n, "INVALID_PAYMENT_TOTAL", "Cash refunds cannot exceed available shift cash");
-  if (actualClosingCashMinor === undefined) return { expectedCashMinor };
-  posAssert(actualClosingCashMinor >= 0n, "INVALID_PAYMENT_TOTAL", "Closing cash cannot be negative");
-  return { expectedCashMinor, differenceMinor: actualClosingCashMinor - expectedCashMinor };
-}
-
 export function assertReservation(input: { startsAt: Date; endsAt?: Date | null; guestCount: number; version: number }, now?: Date): void {
   posAssert(Number.isInteger(input.guestCount) && input.guestCount > 0, "INVALID_QUANTITY", "Guest count must be positive");
   posAssert(Number.isInteger(input.version) && input.version > 0, "VERSION_CONFLICT", "Reservation version must be positive");

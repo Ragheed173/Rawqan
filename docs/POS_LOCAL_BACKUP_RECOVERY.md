@@ -28,7 +28,7 @@ and Diagnostics reports the condition.
    selected file and exact table schema, then replaces all tables in one Dexie
    transaction. A validation or write failure leaves the current database
    unchanged.
-7. After the automatic reload, verify the shift, latest invoice, and Diagnostics
+7. After the automatic reload, verify the latest invoice and Diagnostics
    counters before resuming sales.
 
 ## Important recovery boundary

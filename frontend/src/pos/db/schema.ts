@@ -39,6 +39,15 @@ export class PosDatabase extends Dexie {
     this.version(3).stores({
       receiptPrintEvents: "id, invoiceId, type, createdAt",
     });
+    this.version(4).stores({}).upgrade(async (transaction) => {
+      await transaction
+        .table("syncOperations")
+        .filter((operation) =>
+          ["OPEN_SHIFT", "CLOSE_SHIFT"].includes(operation.operationType),
+        )
+        .delete();
+      await transaction.table("shifts").clear();
+    });
   }
 }
 

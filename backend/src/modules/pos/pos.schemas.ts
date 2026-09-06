@@ -161,11 +161,6 @@ export const refundBody = z.object({
     )
     .optional(),
 });
-export const openShiftBody = z.object({
-  id: uuid.optional(),
-  openingCashMinor: minorUnits,
-});
-export const closeShiftBody = z.object({ actualClosingCashMinor: minorUnits });
 export const reservationBody = z.object({
   id: uuid.optional(),
   customerName: z.string().trim().min(1).max(120),

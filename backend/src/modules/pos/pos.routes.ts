@@ -265,28 +265,6 @@ pos.post(
 );
 
 pos.get(
-  "/shifts/current",
-  asyncHandler(async (req, res) => sendPosSuccess(res, await prismaShift(req))),
-);
-pos.post(
-  "/shifts/open",
-  validate({ body: schemas.openShiftBody }),
-  asyncHandler(async (req, res) =>
-    sendPosSuccess(res, await commands.openShift(req.body, context(req)), 201),
-  ),
-);
-pos.post(
-  "/shifts/:id/close",
-  validate({ params: schemas.idParams, body: schemas.closeShiftBody }),
-  asyncHandler(async (req, res) =>
-    sendPosSuccess(
-      res,
-      await commands.closeShift(req.params.id, req.body, context(req)),
-    ),
-  ),
-);
-
-pos.get(
   "/reservations",
   validate({ query: schemas.reservationsQuery }),
   asyncHandler(async (req, res) =>
@@ -358,14 +336,6 @@ pos.get(
     ),
   ),
 );
-
-async function prismaShift(req: Request) {
-  const ctx = context(req);
-  const { prisma } = await import("../../lib/prisma.js");
-  return prisma.cashierShift.findFirst({
-    where: { userId: ctx.actorId, deviceId: ctx.deviceId, status: "OPEN" },
-  });
-}
 
 export const adminPosRouter = Router();
 adminPosRouter.use(requireAuth);

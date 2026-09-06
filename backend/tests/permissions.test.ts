@@ -36,7 +36,6 @@ describe("RBAC matrix", () => {
       "pos:operate",
       "pos:receipt:reprint",
       "pos:reservation:manage",
-      "pos:shift:self",
     ]);
     for (const forbidden of [
       "pos:discount",

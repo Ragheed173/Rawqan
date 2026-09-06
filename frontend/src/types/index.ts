@@ -149,7 +149,6 @@ export type Permission =
   | "pos:refund"
   | "pos:receipt:reprint"
   | "pos:reservation:manage"
-  | "pos:shift:self"
   | "pos:reports:read"
   | "pos:audit:read"
   | "pos:device:manage";
