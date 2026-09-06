@@ -19,6 +19,7 @@ const {
   statSync,
   writeFileSync,
 } = require("node:fs");
+const { createHash } = require("node:crypto");
 const { dirname, extname, join, normalize, relative, resolve } = require("node:path");
 const { pathToFileURL } = require("node:url");
 
@@ -29,7 +30,8 @@ const APP_URL = `${APP_SCHEME}://${APP_HOST}/pos`;
 const API_ORIGIN = "https://rawaqan-api.onrender.com";
 const REFRESH_COOKIE_NAME = "rawaqan_rt";
 const VIRTUAL_PRINTER = /pdf|onenote|fax|xps|anydesk/i;
-const BACKUP_FORMAT = "RWQ-POS-BACKUP-1";
+const BACKUP_FORMAT = "RWQ-POS-BACKUP-2";
+const LEGACY_BACKUP_FORMAT = "RWQ-POS-BACKUP-1";
 const MAX_BACKUP_BYTES = 64 * 1024 * 1024;
 const BACKUP_RETENTION_DAYS = 31;
 
@@ -50,6 +52,7 @@ protocol.registerSchemesAsPrivileged([
 let mainWindow;
 let settings;
 let printLedger;
+let lastBackupError;
 
 function userFile(name) {
   return join(app.getPath("userData"), name);
@@ -78,35 +81,130 @@ function backupFiles() {
   const directory = backupDirectory();
   if (!existsSync(directory)) return [];
   return readdirSync(directory)
-    .filter((name) => /^rawaqan-pos-\d{4}-\d{2}-\d{2}\.rwqbackup$/.test(name))
+    .filter((name) =>
+      /^rawaqan-pos-(?:pre-restore-)?\d{4}-\d{2}-\d{2}(?:T\d{2}-\d{2}-\d{2}-\d{3}Z)?\.rwqbackup$/.test(
+        name,
+      ),
+    )
     .map((name) => {
       const path = join(directory, name);
       return { name, path, modifiedAt: statSync(path).mtime.toISOString() };
     })
-    .sort((left, right) => right.name.localeCompare(left.name));
+    .sort(
+      (left, right) =>
+        new Date(right.modifiedAt).getTime() - new Date(left.modifiedAt).getTime(),
+    );
 }
 
 function backupStatus() {
   const latest = backupFiles()[0];
+  let latestEncrypted = false;
+  if (latest) {
+    try {
+      const prefix = readFileSync(latest.path).subarray(0, 96).toString("utf8");
+      latestEncrypted = prefix.startsWith(`${BACKUP_FORMAT}\nencrypted\n`) ||
+        prefix.startsWith(`${LEGACY_BACKUP_FORMAT}\nencrypted\n`);
+    } catch {
+      latestEncrypted = false;
+    }
+  }
   return {
     available: Boolean(latest),
     directory: backupDirectory(),
     fileName: latest?.name,
     lastBackupAt: latest?.modifiedAt,
+    encryptionAvailable: safeStorage.isEncryptionAvailable(),
+    latestEncrypted,
+    lastError: lastBackupError,
   };
 }
 
-function saveLocalBackup(snapshot) {
+function validateBackupSnapshot(snapshot) {
   if (
     !snapshot ||
     typeof snapshot !== "object" ||
     snapshot.formatVersion !== 1 ||
+    snapshot.databaseName !== "rawaqan-pos" ||
     typeof snapshot.createdAt !== "string" ||
+    !Number.isFinite(Date.parse(snapshot.createdAt)) ||
+    typeof snapshot.reason !== "string" ||
     !snapshot.tables ||
-    typeof snapshot.tables !== "object"
+    typeof snapshot.tables !== "object" ||
+    Array.isArray(snapshot.tables) ||
+    Object.values(snapshot.tables).some((rows) => !Array.isArray(rows))
   ) {
     throw new Error("INVALID_BACKUP_SNAPSHOT");
   }
+}
+
+function splitEnvelope(buffer, lineCount) {
+  const lines = [];
+  let start = 0;
+  for (let index = 0; index < lineCount; index += 1) {
+    const end = buffer.indexOf(10, start);
+    if (end < 0) throw new Error("INVALID_BACKUP_FILE");
+    lines.push(buffer.subarray(start, end).toString("utf8"));
+    start = end + 1;
+  }
+  return { lines, payload: buffer.subarray(start) };
+}
+
+function loadLocalBackup(path) {
+  const size = statSync(path).size;
+  if (size <= 0 || size > MAX_BACKUP_BYTES) throw new Error("BACKUP_TOO_LARGE");
+  if (!safeStorage.isEncryptionAvailable())
+    throw new Error("BACKUP_ENCRYPTION_UNAVAILABLE");
+
+  const buffer = readFileSync(path);
+  const firstLineEnd = buffer.indexOf(10);
+  if (firstLineEnd < 0) throw new Error("INVALID_BACKUP_FILE");
+  const format = buffer.subarray(0, firstLineEnd).toString("utf8");
+  let payload;
+  if (format === BACKUP_FORMAT) {
+    const envelope = splitEnvelope(buffer, 3);
+    const [parsedFormat, protection, expectedDigest] = envelope.lines;
+    if (parsedFormat !== BACKUP_FORMAT || protection !== "encrypted")
+      throw new Error("UNENCRYPTED_BACKUP_REJECTED");
+    const actualDigest = createHash("sha256").update(envelope.payload).digest("hex");
+    if (!/^[a-f0-9]{64}$/.test(expectedDigest) || actualDigest !== expectedDigest)
+      throw new Error("BACKUP_INTEGRITY_FAILED");
+    payload = envelope.payload;
+  } else if (format === LEGACY_BACKUP_FORMAT) {
+    const envelope = splitEnvelope(buffer, 2);
+    if (envelope.lines[1] !== "encrypted")
+      throw new Error("UNENCRYPTED_BACKUP_REJECTED");
+    payload = envelope.payload;
+  } else {
+    throw new Error("UNSUPPORTED_BACKUP_FORMAT");
+  }
+
+  let snapshot;
+  try {
+    snapshot = JSON.parse(safeStorage.decryptString(payload));
+  } catch {
+    throw new Error("BACKUP_DECRYPTION_FAILED");
+  }
+  validateBackupSnapshot(snapshot);
+  return snapshot;
+}
+
+async function selectLocalBackup() {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: "Restore Rawaqan POS backup",
+    defaultPath: backupDirectory(),
+    properties: ["openFile"],
+    filters: [{ name: "Rawaqan POS backup", extensions: ["rwqbackup"] }],
+  });
+  if (result.canceled || !result.filePaths[0]) return { canceled: true };
+  const path = result.filePaths[0];
+  if (extname(path).toLowerCase() !== ".rwqbackup")
+    throw new Error("INVALID_BACKUP_EXTENSION");
+  const snapshot = loadLocalBackup(path);
+  return { canceled: false, path, snapshot };
+}
+
+function saveLocalBackup(snapshot) {
+  validateBackupSnapshot(snapshot);
   const json = JSON.stringify(snapshot, (_key, value) =>
     typeof value === "bigint" ? value.toString() : value,
   );
@@ -115,15 +213,20 @@ function saveLocalBackup(snapshot) {
 
   const directory = backupDirectory();
   mkdirSync(directory, { recursive: true });
-  const date = new Date().toISOString().slice(0, 10);
-  const target = join(directory, `rawaqan-pos-${date}.rwqbackup`);
+  if (!safeStorage.isEncryptionAvailable())
+    throw new Error("BACKUP_ENCRYPTION_UNAVAILABLE");
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10);
+  const timestamp = now.toISOString().replaceAll(":", "-").replace(".", "-");
+  const name = snapshot.reason === "pre-restore"
+    ? `rawaqan-pos-pre-restore-${timestamp}.rwqbackup`
+    : `rawaqan-pos-${date}.rwqbackup`;
+  const target = join(directory, name);
   const temporary = `${target}.tmp`;
-  const encrypted = safeStorage.isEncryptionAvailable();
-  const payload = encrypted
-    ? safeStorage.encryptString(json)
-    : Buffer.from(json, "utf8");
+  const payload = safeStorage.encryptString(json);
+  const digest = createHash("sha256").update(payload).digest("hex");
   const envelope = Buffer.concat([
-    Buffer.from(`${BACKUP_FORMAT}\n${encrypted ? "encrypted" : "plain"}\n`, "utf8"),
+    Buffer.from(`${BACKUP_FORMAT}\nencrypted\n${digest}\n`, "utf8"),
     payload,
   ]);
   writeFileSync(temporary, envelope);
@@ -132,7 +235,8 @@ function saveLocalBackup(snapshot) {
 
   for (const old of backupFiles().slice(BACKUP_RETENTION_DAYS))
     rmSync(old.path, { force: true });
-  return { ok: true, path: target, encrypted, lastBackupAt: new Date().toISOString() };
+  lastBackupError = undefined;
+  return { ok: true, path: target, encrypted: true, lastBackupAt: now.toISOString() };
 }
 
 function loadSettings() {
@@ -508,9 +612,15 @@ else {
       cloudOrigin: API_ORIGIN,
     }));
     ipcMain.handle("rawaqan:get-backup-status", async () => backupStatus());
-    ipcMain.handle("rawaqan:save-local-backup", (_event, snapshot) =>
-      saveLocalBackup(snapshot),
-    );
+    ipcMain.handle("rawaqan:save-local-backup", (_event, snapshot) => {
+      try {
+        return saveLocalBackup(snapshot);
+      } catch (error) {
+        lastBackupError = error instanceof Error ? error.message : "BACKUP_FAILED";
+        throw error;
+      }
+    });
+    ipcMain.handle("rawaqan:select-local-backup", selectLocalBackup);
     ipcMain.handle("rawaqan:configure-printer", configurePrinter);
     ipcMain.handle("rawaqan:print-receipt", (_event, job) => printHtml(job || {}));
     ipcMain.handle("rawaqan:clear-session", async () => {

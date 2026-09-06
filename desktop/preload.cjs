@@ -7,6 +7,7 @@ const bridge = Object.freeze({
   getBackupStatus: () => ipcRenderer.invoke("rawaqan:get-backup-status"),
   saveLocalBackup: (snapshot) =>
     ipcRenderer.invoke("rawaqan:save-local-backup", snapshot),
+  selectLocalBackup: () => ipcRenderer.invoke("rawaqan:select-local-backup"),
   configurePrinter: () => ipcRenderer.invoke("rawaqan:configure-printer"),
   printReceipt: (job) => ipcRenderer.invoke("rawaqan:print-receipt", job),
   clearSession: () => ipcRenderer.invoke("rawaqan:clear-session"),

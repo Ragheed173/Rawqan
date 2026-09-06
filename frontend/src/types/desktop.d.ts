@@ -26,7 +26,18 @@ interface RawaqanDesktopBridge {
     directory: string;
     fileName?: string;
     lastBackupAt?: string;
+    encryptionAvailable: boolean;
+    latestEncrypted: boolean;
+    lastError?: string;
   }>;
+  selectLocalBackup?(): Promise<
+    | { canceled: true }
+    | {
+        canceled: false;
+        path: string;
+        snapshot: import("@/pos/db/backup").PosBackupSnapshot;
+      }
+  >;
   saveLocalBackup?(snapshot: import("@/pos/db/backup").PosBackupSnapshot): Promise<{
     ok: boolean;
     path: string;

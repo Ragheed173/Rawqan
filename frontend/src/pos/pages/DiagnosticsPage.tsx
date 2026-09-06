@@ -9,9 +9,10 @@ import {
   verifyPosStorage,
   type PosStorageHealth,
 } from "../db/diagnostics";
-import { flushDesktopBackup } from "../db/backup";
+import { flushDesktopBackup, restoreDesktopBackup } from "../db/backup";
 import { isPosCloudAuthenticationRequired } from "@/lib/apiClient";
 import { useAuthStore } from "@/store/auth";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface WorkerStatus {
   version: string;
@@ -24,6 +25,9 @@ interface BackupStatus {
   directory: string;
   fileName?: string;
   lastBackupAt?: string;
+  encryptionAvailable: boolean;
+  latestEncrypted: boolean;
+  lastError?: string;
 }
 
 async function serviceWorkerStatus(): Promise<WorkerStatus> {
@@ -61,6 +65,7 @@ const persistenceLabels = {
 export default function DiagnosticsPage() {
   const navigate = useNavigate();
   const expireAuthentication = useAuthStore((value) => value.expire);
+  const { can } = usePermissions();
   const isDesktop = Boolean(window.rawaqanDesktop?.isDesktop);
   const state = usePosLive(
     () => posDb.deviceState.get("primary"),
@@ -180,6 +185,52 @@ export default function DiagnosticsPage() {
       setBusy(false);
     }
   };
+  const createBackup = async () => {
+    if (busy) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await flushDesktopBackup("manual");
+      const next = (await window.rawaqanDesktop?.getBackupStatus?.()) ?? null;
+      setBackup(next);
+      setMessage(
+        next?.latestEncrypted
+          ? "تم حفظ نسخة احتياطية محلية مشفرة ومحمية بفحص سلامة."
+          : "تعذر التحقق من تشفير النسخة الاحتياطية.",
+      );
+    } catch {
+      setMessage("تعذر حفظ النسخة الاحتياطية المحلية المشفرة.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const restoreBackup = async () => {
+    if (busy) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const result = await restoreDesktopBackup();
+      if (result.canceled) {
+        setMessage("تم إلغاء الاستعادة دون تغيير أي بيانات.");
+        return;
+      }
+      setMessage("تمت الاستعادة بنجاح. سيُعاد تحميل التطبيق الآن.");
+      window.setTimeout(() => window.location.reload(), 800);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "RESTORE_FAILED";
+      setMessage(
+        code.includes("RESTORE_UNRESOLVED_OPERATIONS")
+          ? "لا يمكن الاستعادة قبل مزامنة أو معالجة جميع العمليات المعلقة والفاشلة."
+          : code.includes("BACKUP_DECRYPTION_FAILED")
+            ? "تعذر فك النسخة. يجب أن تكون من نفس حساب ويندوز الذي أنشأها."
+            : code.includes("BACKUP_INTEGRITY_FAILED")
+              ? "فشل فحص سلامة النسخة؛ الملف تالف أو تم تعديله."
+              : "تعذرت الاستعادة. لم تتغير البيانات المحلية.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
   const capabilityExpired = Boolean(
     !session?.standalone &&
       session?.expiresAt &&
@@ -267,7 +318,19 @@ export default function DiagnosticsPage() {
             value: backup?.lastBackupAt
               ? `${new Date(backup.lastBackupAt).toLocaleString("ar")} — ${backup.directory}`
               : "لم تُنشأ بعد",
-            tone: backup?.available ? ("good" as const) : ("warn" as const),
+            tone:
+              backup?.available && backup.latestEncrypted
+                ? ("good" as const)
+                : ("warn" as const),
+          },
+          {
+            label: "تشفير النسخ المحلية",
+            value: backup?.encryptionAvailable
+              ? "متاح — الحفظ المشفّر فقط"
+              : "غير متاح — تم إيقاف الحفظ لحماية البيانات",
+            tone: backup?.encryptionAvailable
+              ? ("good" as const)
+              : ("danger" as const),
           },
         ]
       : []),
@@ -311,25 +374,24 @@ export default function DiagnosticsPage() {
         {isDesktop && (
           <button
             disabled={busy}
-            onClick={() => {
-              if (busy) return;
-              setBusy(true);
-              setMessage("");
-              void flushDesktopBackup("manual")
-                .then(async () => {
-                  setBackup(
-                    (await window.rawaqanDesktop?.getBackupStatus?.()) ?? null,
-                  );
-                  setMessage("تم حفظ نسخة احتياطية محلية مشفرة.");
-                })
-                .catch(() =>
-                  setMessage("تعذر حفظ النسخة الاحتياطية المحلية."),
-                )
-                .finally(() => setBusy(false));
-            }}
+            onClick={() => void createBackup()}
             className="min-h-12 rounded-xl border border-slate-300 bg-white px-4 font-bold disabled:opacity-50"
           >
             نسخة احتياطية الآن
+          </button>
+        )}
+        {isDesktop && can("backup:manage") && (
+          <button
+            disabled={busy || pending + failed + conflicts > 0}
+            onClick={() => void restoreBackup()}
+            className="min-h-12 rounded-xl border border-amber-500 bg-amber-50 px-4 font-bold text-amber-950 disabled:opacity-50"
+            title={
+              pending + failed + conflicts > 0
+                ? "عالج العمليات غير المتزامنة أولاً"
+                : "استعادة نسخة محلية مشفرة"
+            }
+          >
+            استعادة نسخة محلية
           </button>
         )}
       </div>
