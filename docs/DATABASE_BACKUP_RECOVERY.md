@@ -74,12 +74,19 @@ order, paid invoice, cash payment, open cashier shift, and completed sync
 operation. Archive listing and SHA-256 validation passed, the complete archive
 restored successfully, and all six critical-table counts matched.
 
-The exercise also found that a brand-new empty database cannot currently run
+The exercise also found that a brand-new empty database could not run
 `prisma migrate deploy` directly because migration directory names `10_*` and
 `11_*` sort before `2_*`. Existing production was not affected because `0–9`
-were already applied, and a full dump restore does not replay migrations. Fix
-and continuously test fresh-database migration ordering before treating a
-migration-only rebuild as a recovery path.
+were already applied, and a full dump restore does not replay migrations.
+
+The production container now runs `npm run db:deploy:safe --workspace backend`.
+That wrapper uses normal Prisma migration deployment for an existing database,
+but bootstraps a verified-empty database in numeric order and records the
+immutable original migration names. It refuses an interrupted bootstrap, an
+existing schema without migration history, and pending historical cleanup
+migrations when transactional rows exist. CI runs the wrapper twice against a
+fresh disposable PostgreSQL database before executing the POS integration
+suite, proving both first deployment and restart behavior.
 
 Later on 2026-08-29 a complete production backup was created with PostgreSQL
 18.6 tools and restored into a disposable PostgreSQL 18 database. Archive and
@@ -88,3 +95,9 @@ migrations, 13 orders, 13 invoices, 13 payments, 6 cashier shifts, and 126 sync
 operations. The disposable database was removed after verification; the dump
 and manifest remain only in the ignored local backup directory pending transfer
 to encrypted external storage.
+
+On 2026-09-06 a new production dump was created after database credentials were
+rotated. Its checksum and archive validation passed, and it restored into the
+disposable `rawaqan_restore_test` database with all critical financial and
+operational table counts matching its manifest. The temporary Neon branch was
+configured to expire automatically after one day.

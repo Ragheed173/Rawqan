@@ -33,14 +33,16 @@ WORKDIR /app/backend
 EXPOSE 4000
 USER node
 
-# Apply migrations (prisma CLI resolves to the hoisted root node_modules), then boot.
+# Apply migrations through the safety wrapper, then boot. The wrapper preserves
+# existing Prisma history, bootstraps only a verified-empty database in numeric
+# order, and refuses destructive legacy cleanup when transactional rows exist.
 # Retried with backoff: serverless Postgres (Neon) suspends idle compute and a
 # cold connect can exceed Prisma's connect timeout (P1001) — the first failed
 # attempt itself triggers the wake-up, so a retry ~10s later succeeds.
 CMD ["sh", "-c", "\
   ok=0; \
   for i in 1 2 3 4 5; do \
-    npx prisma migrate deploy && ok=1 && break; \
+    npm run db:deploy:safe && ok=1 && break; \
     echo \"migrate deploy failed (attempt $i/5) — waiting for database to wake…\"; \
     sleep 10; \
   done; \
