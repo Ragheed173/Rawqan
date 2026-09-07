@@ -26,16 +26,17 @@ export interface ReceiptPrinter {
     data: ReceiptData,
     profile?: "80mm" | "58mm",
     reservedTarget?: Window | HTMLIFrameElement,
+    options?: { openCashDrawer?: boolean },
   ): Promise<void>;
 }
 
 const CSS_PIXELS_PER_MM = 96 / 25.4;
-const RECEIPT_BOTTOM_FEED_MM = 35;
-const RECEIPT_PAGE_SAFETY_MM = 10;
+const RECEIPT_BOTTOM_FEED_MM = 2;
+const RECEIPT_PAGE_SAFETY_MM = 0;
 
 export function calculateReceiptPageHeightMm(contentHeightPx: number) {
   return Math.max(
-    60,
+    20,
     Math.ceil(contentHeightPx / CSS_PIXELS_PER_MM + RECEIPT_PAGE_SAFETY_MM),
   );
 }
@@ -157,6 +158,7 @@ export class BrowserReceiptPrinter implements ReceiptPrinter {
     data: ReceiptData,
     profile: "80mm" | "58mm" = "80mm",
     reservedTarget?: Window | HTMLIFrameElement,
+    options: { openCashDrawer?: boolean } = {},
   ) {
     if (window.rawaqanDesktop?.isDesktop) {
       this.releasePrintTarget(reservedTarget);
@@ -168,6 +170,7 @@ export class BrowserReceiptPrinter implements ReceiptPrinter {
         jobId: `${data.invoice.id}:INITIAL`,
         isReprint: Boolean(data.isReprint),
         automatic: Boolean(reservedTarget),
+        openCashDrawer: Boolean(options.openCashDrawer),
       });
       return;
     }
@@ -201,8 +204,6 @@ export class BrowserReceiptPrinter implements ReceiptPrinter {
       const heightPx = calculateReceiptDocumentHeightPx(
         receipt.scrollHeight,
         Math.ceil(receipt.getBoundingClientRect().height),
-        popup.document.body.scrollHeight,
-        popup.document.documentElement.scrollHeight,
       );
       const heightMm = calculateReceiptPageHeightMm(heightPx);
       pageStyle.textContent = `@page{size:${profile} ${heightMm}mm;margin:0}`;

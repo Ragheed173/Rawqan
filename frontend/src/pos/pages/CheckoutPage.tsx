@@ -96,7 +96,9 @@ export default function CheckoutPage() {
           invoice.id,
           admin?.name ?? "الكاشير",
         );
-        await printer.print(receipt, "80mm", printTarget);
+        await printer.print(receipt, "80mm", printTarget, {
+          openCashDrawer: Boolean(window.rawaqanDesktop?.isDesktop),
+        });
         await recordLocalPrintEvent(invoice.id, "INITIAL", "80mm");
         nav(`/pos/invoices/${invoice.id}`);
       } catch {

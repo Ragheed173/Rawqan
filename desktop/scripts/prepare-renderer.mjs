@@ -1,5 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -34,7 +34,7 @@ if (archive.status !== 0 || !archive.stdout) {
   throw new Error(`Unable to create clean frontend archive: ${archive.stderr?.toString() ?? "unknown error"}`);
 }
 writeFileSync(archivePath, archive.stdout);
-run("tar", ["-xf", archivePath, "-C", buildRoot]);
+run("tar", ["-xf", relative(repoRoot, archivePath), "-C", relative(repoRoot, buildRoot)]);
 
 // Overlay only the intentional desktop integration files. This deliberately
 // ignores unrelated working-tree edits, so a cashier build always contains the
@@ -43,6 +43,7 @@ const overlays = [
   "frontend/src/layouts/AdminLayout.tsx",
   "frontend/src/services/admin/auth.service.ts",
   "frontend/src/pos/components/PosLayout.tsx",
+  "frontend/src/pos/pages/CheckoutPage.tsx",
   "frontend/src/pos/printing/ReceiptPrinter.ts",
   "frontend/src/lib/registerSW.ts",
   "frontend/src/types/desktop.d.ts",
