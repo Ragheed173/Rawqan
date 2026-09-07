@@ -13,14 +13,15 @@ import { upload } from "./multer.js";
 import { recordCatalogChange } from "../menu/catalogRevision.js";
 import { cloudinaryEnabled } from "../../lib/cloudinary.js";
 import { mirrorExternalCatalogImageBatch } from "./catalogImageMirror.service.js";
+import { itemIdSchema, imageIdSchema } from "../menu/catalog-id.js";
 
 const router = Router();
 router.use(requireAuth);
 
-const itemParam = z.object({ itemId: z.string().cuid() });
-const imageParam = z.object({ imageId: z.string().cuid() });
+const itemParam = z.object({ itemId: itemIdSchema });
+const imageParam = z.object({ imageId: imageIdSchema });
 const imagePatch = z.object({ alt: z.string().trim().max(200).nullable().optional(), sortOrder: z.number().int().optional() });
-const imageOrder = z.object({ images: z.array(z.object({ id: z.string().cuid(), sortOrder: z.number().int() })).min(1) });
+const imageOrder = z.object({ images: z.array(z.object({ id: imageIdSchema, sortOrder: z.number().int() })).min(1) });
 const mirrorBatch = z.object({
   cursor: z.string().trim().min(1).max(200).optional(),
   limit: z.number().int().min(1).max(5).default(3),
