@@ -12,7 +12,7 @@
     "prepare:renderer": "node scripts/prepare-renderer.mjs",
     "start": "npm run prepare:renderer && electron .",
     "pack:win": "npm run prepare:renderer && electron-builder --win dir --x64",
-    "dist:win": "npm run prepare:renderer && electron-builder --win nsis --x64",
+    "dist:win": "npm run prepare:renderer && electron-builder --win nsis --x64 --publish never",
     "test": "node --test test/*.test.cjs"
   },
   "devDependencies": {
