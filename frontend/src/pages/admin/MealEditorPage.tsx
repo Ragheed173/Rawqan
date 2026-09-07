@@ -35,8 +35,8 @@ const schema = z
     description: z.string().max(2000).optional(),
     ingredients: z.string().max(2000).optional(),
     price: wholePrice,
-    discountPrice: z.union([wholePrice, z.literal('')]).optional(),
-    calories: z.union([z.coerce.number().int().nonnegative(), z.literal('')]).optional(),
+    discountPrice: z.union([z.literal(''), wholePrice]).optional(),
+    calories: z.union([z.literal(''), z.coerce.number().int().nonnegative()]).optional(),
     allergens: z.string().max(500).optional(),
     spiceLevel: z.enum(['NONE', 'MILD', 'MEDIUM', 'HOT']),
     featuredFrom: z.string().optional(),
@@ -75,7 +75,7 @@ export default function MealEditorPage() {
   const { data: categories } = useAdminCategories();
   const { data: tags } = useAdminTags();
 
-  const { data: item, isLoading } = useQuery({
+  const { data: item, isLoading, isError, error: loadError, refetch } = useQuery({
     queryKey: adminKeys.item(id ?? ''),
     queryFn: () => adminItemService.get(id!),
     enabled: !isNew,
@@ -195,6 +195,17 @@ export default function MealEditorPage() {
       <div className="space-y-4">
         <Skeleton className="h-10 w-48" />
         <Skeleton className="h-96 rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (!isNew && (isError || !item)) {
+    return (
+      <div className="space-y-4">
+        <PageHeader title="تعديل الوجبة" />
+        <p role="alert">تعذر تحميل بيانات الوجبة. {getApiErrorMessage(loadError)}</p>
+        <Button onClick={() => void refetch()}>إعادة المحاولة</Button>
+        <Button asChild variant="outline"><Link to="/admin/meals">الرجوع للوجبات</Link></Button>
       </div>
     );
   }
