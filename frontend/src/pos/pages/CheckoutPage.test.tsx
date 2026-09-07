@@ -122,6 +122,7 @@ describe("CheckoutPage", () => {
         receipt,
         "80mm",
         printTarget,
+        { openCashDrawer: false },
       ),
     );
     expect(commandMocks.recordPrint).toHaveBeenCalledWith(
