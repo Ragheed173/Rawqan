@@ -26,7 +26,6 @@ export interface ReceiptPrinter {
     data: ReceiptData,
     profile?: "80mm" | "58mm",
     reservedTarget?: Window | HTMLIFrameElement,
-    options?: { openCashDrawer?: boolean },
   ): Promise<void>;
 }
 
@@ -158,7 +157,6 @@ export class BrowserReceiptPrinter implements ReceiptPrinter {
     data: ReceiptData,
     profile: "80mm" | "58mm" = "80mm",
     reservedTarget?: Window | HTMLIFrameElement,
-    options: { openCashDrawer?: boolean } = {},
   ) {
     if (window.rawaqanDesktop?.isDesktop) {
       this.releasePrintTarget(reservedTarget);
@@ -170,7 +168,6 @@ export class BrowserReceiptPrinter implements ReceiptPrinter {
         jobId: `${data.invoice.id}:INITIAL`,
         isReprint: Boolean(data.isReprint),
         automatic: Boolean(reservedTarget),
-        openCashDrawer: Boolean(options.openCashDrawer),
       });
       return;
     }

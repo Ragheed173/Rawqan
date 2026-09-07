@@ -12,7 +12,6 @@ interface RawaqanDesktopPrintJob {
   jobId: string;
   isReprint: boolean;
   automatic: boolean;
-  openCashDrawer?: boolean;
 }
 
 interface RawaqanDesktopBridge {

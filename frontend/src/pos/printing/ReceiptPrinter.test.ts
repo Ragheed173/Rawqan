@@ -140,7 +140,6 @@ describe("receipt renderer", () => {
         printerName: "Thermal-80mm",
         paperProfile: "80mm",
         autoPrint: true,
-        cashDrawerEnabled: true,
         launchAtLogin: true,
       }),
       configurePrinter: vi.fn(),
@@ -157,7 +156,6 @@ describe("receipt renderer", () => {
         jobId: "invoice-1:INITIAL",
         isReprint: true,
         automatic: false,
-        openCashDrawer: false,
         html: expect.stringContaining("INV-2026-0001"),
       }),
     );

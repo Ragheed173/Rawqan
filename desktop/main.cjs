@@ -22,7 +22,6 @@ const {
   writeFileSync,
 } = require("node:fs");
 const { createHash } = require("node:crypto");
-const { execFileSync } = require("node:child_process");
 const { dirname, extname, join, normalize, relative, resolve } = require("node:path");
 const { pathToFileURL } = require("node:url");
 
@@ -248,7 +247,6 @@ function loadSettings() {
     printerName: typeof saved.printerName === "string" ? saved.printerName : "",
     paperProfile: saved.paperProfile === "58mm" ? "58mm" : "80mm",
     autoPrint: saved.autoPrint !== false,
-    cashDrawerEnabled: saved.cashDrawerEnabled !== false,
     launchAtLogin: saved.launchAtLogin !== false,
   };
 }
@@ -420,52 +418,7 @@ function printWindowContents(window, options) {
   });
 }
 
-function kickCashDrawer(printerName) {
-  const printerNameBase64 = Buffer.from(printerName, "utf8").toString("base64");
-  const script = `
-$printerName = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${printerNameBase64}'))
-if (-not ('RawaqanRawPrinter' -as [type])) {
-  Add-Type @'
-using System;
-using System.Runtime.InteropServices;
-public static class RawaqanRawPrinter {
-  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-  public class DOCINFO { public string pDocName; public string pOutputFile; public string pDataType; }
-  [DllImport("winspool.drv", EntryPoint = "OpenPrinterW", SetLastError = true, CharSet = CharSet.Unicode)] public static extern bool OpenPrinter(string name, out IntPtr handle, IntPtr defaults);
-  [DllImport("winspool.drv", SetLastError = true)] public static extern bool ClosePrinter(IntPtr handle);
-  [DllImport("winspool.drv", EntryPoint = "StartDocPrinterW", SetLastError = true, CharSet = CharSet.Unicode)] public static extern int StartDocPrinter(IntPtr handle, int level, [In] DOCINFO info);
-  [DllImport("winspool.drv", SetLastError = true)] public static extern bool EndDocPrinter(IntPtr handle);
-  [DllImport("winspool.drv", SetLastError = true)] public static extern bool StartPagePrinter(IntPtr handle);
-  [DllImport("winspool.drv", SetLastError = true)] public static extern bool EndPagePrinter(IntPtr handle);
-  [DllImport("winspool.drv", SetLastError = true)] public static extern bool WritePrinter(IntPtr handle, byte[] data, int count, out int written);
-}
-'@
-}
-$handle = [IntPtr]::Zero
-if (-not [RawaqanRawPrinter]::OpenPrinter($printerName, [ref]$handle, [IntPtr]::Zero)) { throw 'OPEN_PRINTER_FAILED' }
-try {
-  $info = New-Object RawaqanRawPrinter+DOCINFO
-  $info.pDocName = 'Rawaqan Cash Drawer'
-  $info.pDataType = 'RAW'
-  if ([RawaqanRawPrinter]::StartDocPrinter($handle, 1, $info) -eq 0) { throw 'START_RAW_PRINT_FAILED' }
-  try {
-    if (-not [RawaqanRawPrinter]::StartPagePrinter($handle)) { throw 'START_RAW_PAGE_FAILED' }
-    try {
-      $command = [byte[]](0x1b, 0x70, 0x00, 0x19, 0xfa)
-      $written = 0
-      if (-not [RawaqanRawPrinter]::WritePrinter($handle, $command, $command.Length, [ref]$written) -or $written -ne $command.Length) { throw 'WRITE_DRAWER_COMMAND_FAILED' }
-    } finally { [RawaqanRawPrinter]::EndPagePrinter($handle) | Out-Null }
-  } finally { [RawaqanRawPrinter]::EndDocPrinter($handle) | Out-Null }
-} finally { [RawaqanRawPrinter]::ClosePrinter($handle) | Out-Null }
-`;
-  execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script], {
-    stdio: "ignore",
-    windowsHide: true,
-    timeout: 5_000,
-  });
-}
-
-async function printHtml({ html, profile = "80mm", jobId, isReprint = false, automatic = false, openCashDrawer = false }) {
+async function printHtml({ html, profile = "80mm", jobId, isReprint = false, automatic = false }) {
   if (typeof html !== "string" || html.length === 0 || html.length > 2_000_000) {
     throw new Error("INVALID_RECEIPT_HTML");
   }
@@ -507,14 +460,6 @@ async function printHtml({ html, profile = "80mm", jobId, isReprint = false, aut
       copies: 1,
       collate: false,
     });
-
-    if (openCashDrawer && settings.cashDrawerEnabled) {
-      try {
-        kickCashDrawer(printer.name);
-      } catch (error) {
-        console.warn("Cash drawer kick failed", error instanceof Error ? error.message : error);
-      }
-    }
 
     if (!isReprint && safeJobId) {
       printLedger[safeJobId] = {
@@ -565,15 +510,6 @@ async function configurePrinter() {
         checked: settings.autoPrint,
         click: (item) => {
           settings.autoPrint = item.checked;
-          saveSettings();
-        },
-      },
-      {
-        label: "فتح درج الكاش بعد الدفع النقدي",
-        type: "checkbox",
-        checked: settings.cashDrawerEnabled,
-        click: (item) => {
-          settings.cashDrawerEnabled = item.checked;
           saveSettings();
         },
       },
