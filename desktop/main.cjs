@@ -9,6 +9,8 @@ const {
   safeStorage,
   shell,
 } = require("electron");
+const { autoUpdater } = require("electron-updater");
+const { initializeAutoUpdates } = require("./updater.cjs");
 const {
   existsSync,
   mkdirSync,
@@ -629,6 +631,12 @@ else {
     });
 
     createWindow();
+    initializeAutoUpdates({
+      app,
+      autoUpdater,
+      dialog,
+      getMainWindow: () => mainWindow,
+    });
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
