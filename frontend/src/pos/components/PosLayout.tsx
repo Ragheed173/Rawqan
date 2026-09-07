@@ -22,11 +22,7 @@ import {
 } from "../sync/engine";
 import { usePosLive } from "../hooks/usePosLive";
 import { cn } from "@/lib/utils";
-import {
-  api,
-  isPosCloudAuthenticationRequired,
-  unwrap,
-} from "@/lib/apiClient";
+import { api, isPosCloudAuthenticationRequired, unwrap } from "@/lib/apiClient";
 import { verifyPosStorage } from "../db/diagnostics";
 import { posErrorMessage } from "../errors";
 import { useAuthStore } from "@/store/auth";
@@ -58,6 +54,12 @@ export function PosLayout() {
   const [updateRegistration, setUpdateRegistration] =
     useState<ServiceWorkerRegistration>();
   const [pwaReady, setPwaReady] = useState(isDesktop);
+  const [bootstrapping, setBootstrapping] = useState(
+    () =>
+      Boolean(localStorage.getItem("rawaqan_pos_device_id")) &&
+      navigator.onLine &&
+      !isPosCloudAuthenticationRequired(),
+  );
   const [syncing, setSyncing] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [cloudAuthRequired, setCloudAuthRequired] = useState(
@@ -114,20 +116,25 @@ export function PosLayout() {
   };
 
   useEffect(() => {
+    const bootstrapController = new AbortController();
     const deviceId = localStorage.getItem("rawaqan_pos_device_id");
-    if (
-      deviceId &&
-      navigator.onLine &&
-      !isPosCloudAuthenticationRequired()
-    )
+    if (deviceId && navigator.onLine && !isPosCloudAuthenticationRequired()) {
+      setBootstrapping(true);
       void unwrap<Record<string, unknown>>(
         api.get(`/pos/bootstrap?deviceId=${deviceId}`, {
           headers: { "x-pos-device-id": deviceId },
+          signal: bootstrapController.signal,
         }),
       )
         .then(async (data) => {
+          if (bootstrapController.signal.aborted) return;
           setOnline(true);
           await applyBootstrap(data as never);
+          if (bootstrapController.signal.aborted) return;
+          // The route may safely render as soon as the bootstrap transaction is
+          // committed. Follow-up sync and service-worker readiness must not keep
+          // cashier actions blocked (the service worker is absent in dev/desktop).
+          setBootstrapping(false);
           await syncNow({ retryFailed: true });
           if (isDesktop) return;
           const registration = await navigator.serviceWorker?.ready;
@@ -143,11 +150,16 @@ export function PosLayout() {
           }, 500);
         })
         .catch((error) => {
+          if (bootstrapController.signal.aborted) return;
           setOnline(false);
           setDiagnostic(
             `${posErrorMessage(error, "تعذر تحديث بيانات البدء.")} البيانات المحلية لم تُمسح.`,
           );
+        })
+        .finally(() => {
+          if (!bootstrapController.signal.aborted) setBootstrapping(false);
         });
+    } else setBootstrapping(false);
     const stopSync = startSyncTriggers();
     const updateOnline = () => {
       if (!navigator.onLine) setOnline(false);
@@ -187,7 +199,9 @@ export function PosLayout() {
     };
     const cloudAuthenticationRestored = () => {
       setCloudAuthRequired(false);
-      setDiagnostic("تم ربط Render مجدداً. ستبدأ مزامنة العمليات المحفوظة تلقائياً.");
+      setDiagnostic(
+        "تم ربط Render مجدداً. ستبدأ مزامنة العمليات المحفوظة تلقائياً.",
+      );
       void syncNow({ retryFailed: true }).catch(() => undefined);
     };
     window.addEventListener("online", updateOnline);
@@ -216,6 +230,7 @@ export function PosLayout() {
         if (registration.waiting) setUpdateRegistration(registration);
       });
     return () => {
+      bootstrapController.abort();
       stopSync();
       window.removeEventListener("online", updateOnline);
       window.removeEventListener("offline", updateOnline);
@@ -226,7 +241,10 @@ export function PosLayout() {
       window.removeEventListener("rawaqan-pos-storage-blocked", storageBlocked);
       window.removeEventListener("unhandledrejection", storageFailure);
       window.removeEventListener("rawaqan-sw-update", swUpdate);
-      window.removeEventListener("rawaqan-auth-required", authenticationRequired);
+      window.removeEventListener(
+        "rawaqan-auth-required",
+        authenticationRequired,
+      );
       window.removeEventListener(
         "rawaqan-pos-cloud-auth-required",
         cloudAuthenticationRequired,
@@ -335,10 +353,10 @@ export function PosLayout() {
             {cloudAuthRequired
               ? `ربط Render — ${pending} محفوظ`
               : syncing
-              ? "جارٍ المزامنة"
-              : !online
-                ? `${pending} بانتظار الإنترنت`
-                : `${pending} معلّق — إعادة المحاولة`}
+                ? "جارٍ المزامنة"
+                : !online
+                  ? `${pending} بانتظار الإنترنت`
+                  : `${pending} معلّق — إعادة المحاولة`}
           </button>
           <span
             className={cn(
@@ -415,8 +433,17 @@ export function PosLayout() {
             </NavLink>
           ))}
         </nav>
-        <main className="min-w-0 flex-1 p-4 md:p-6">
-          <Outlet />
+        <main aria-busy={bootstrapping} className="min-w-0 flex-1 p-4 md:p-6">
+          {bootstrapping ? (
+            <div
+              role="status"
+              className="mx-auto mt-10 max-w-xl rounded-2xl bg-white p-6 text-center text-lg font-bold shadow-sm"
+            >
+              جارٍ تجهيز بيانات نقطة البيع…
+            </div>
+          ) : (
+            <Outlet />
+          )}
         </main>
       </div>
     </div>
