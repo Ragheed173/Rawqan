@@ -445,7 +445,10 @@ async function printHtml({ html, profile = "80mm", jobId, isReprint = false, aut
       `(() => { const receipt = document.querySelector('.receipt'); if (!receipt) throw new Error('RECEIPT_CONTENT_MISSING'); return Math.max(receipt.scrollHeight, Math.ceil(receipt.getBoundingClientRect().height)); })()`,
       true,
     );
-    const widthMicrons = effectiveProfile === "58mm" ? 58_000 : 80_000;
+    // POS-80C labels the roll as 80 mm, while its Windows driver exposes a
+    // maximum page width of 72.07 mm. Chromium can accept 80,000 microns even
+    // when the driver later drops the job, so stay inside the advertised size.
+    const widthMicrons = effectiveProfile === "58mm" ? 58_000 : 72_000;
     const heightMicrons = Math.min(3_276_000, Math.max(30_000, Math.ceil((Number(heightPx) / 96) * 25_400) + 2_000));
 
     await printWindowContents(receiptWindow, {

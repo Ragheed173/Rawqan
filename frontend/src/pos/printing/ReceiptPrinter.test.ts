@@ -93,12 +93,13 @@ describe("receipt renderer", () => {
     "renders a hardened %s receipt",
     (profile) => {
       const html = renderReceiptHtml(fixture(), profile);
-      expect(html).toContain(`@page{size:${profile} auto;margin:0}`);
-      expect(html).toContain(`width:${profile}`);
+      const pageWidth = profile === "58mm" ? "58mm" : "72mm";
+      expect(html).toContain(`@page{size:${pageWidth} auto;margin:0}`);
+      expect(html).toContain(`width:${pageWidth}`);
       expect(html).toContain(
         `width:${profile === "58mm" ? "46mm" : "68mm"}`,
       );
-      expect(html).toContain("margin:0 auto 0 2mm");
+      expect(html).toContain("margin:0 auto;padding:1mm 0 0");
       expect(html).toContain('id="receipt-page-size"');
       expect(html).toContain('dir="rtl"');
       expect(html).toContain("unicode-bidi:embed");

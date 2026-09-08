@@ -1,6 +1,6 @@
 {
   "name": "@rawaqan/pos-desktop",
-  "version": "1.3.6",
+  "version": "1.3.7",
   "private": true,
   "description": "Rawaqan POS offline-first Windows desktop application",
   "repository": {
