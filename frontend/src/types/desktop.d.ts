@@ -2,7 +2,6 @@ interface RawaqanDesktopSettings {
   printerName: string;
   paperProfile: "80mm" | "58mm";
   autoPrint: boolean;
-  cashDrawerEnabled: boolean;
   launchAtLogin: boolean;
 }
 

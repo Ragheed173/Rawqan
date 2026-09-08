@@ -1,11 +1,10 @@
 import { z } from 'zod';
-import { categoryIdSchema, itemIdSchema } from './catalog-id.js';
 
 const spice = z.enum(['NONE', 'MILD', 'MEDIUM', 'HOT']);
 const wholePrice = z.number().int().nonnegative();
 
 export const createItemSchema = z.object({
-  categoryId: categoryIdSchema,
+  categoryId: z.string().cuid(),
   name: z.string().min(1).max(160),
   nameEn: z.string().max(160).optional().nullable(),
   description: z.string().max(2000).optional().nullable(),
@@ -37,7 +36,7 @@ export const createItemSchema = z.object({
 
 export const updateItemSchema = z
   .object({
-    categoryId: categoryIdSchema.optional(),
+    categoryId: z.string().cuid().optional(),
     name: z.string().min(1).max(160).optional(),
     nameEn: z.string().max(160).optional().nullable(),
     description: z.string().max(2000).optional().nullable(),
@@ -74,7 +73,7 @@ const queryBool = z
   .optional();
 
 export const listItemsQuerySchema = z.object({
-  categoryId: categoryIdSchema.optional(),
+  categoryId: z.string().cuid().optional(),
   search: z.string().max(120).optional(),
   featured: queryBool,
   bestSeller: queryBool,
@@ -88,7 +87,7 @@ export const listItemsQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).optional(),
 });
 
-export const idParamSchema = z.object({ id: itemIdSchema });
+export const idParamSchema = z.object({ id: z.string().cuid() });
 export const slugParamSchema = z.object({ slug: z.string().min(1) });
 
 export type CreateItemInput = z.infer<typeof createItemSchema>;

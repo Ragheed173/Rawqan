@@ -5,13 +5,13 @@ import { validate } from "../../middleware/validate.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { sendCreated, sendSuccess } from "../../utils/http.js";
 import * as service from "./modifier.service.js";
-import { itemIdSchema } from "./catalog-id.js";
 
 const uuid = z.string().uuid();
+const cuid = z.string().cuid();
 const groupParams = z.object({ id: uuid });
 const optionParams = z.object({ id: uuid });
 const groupOptionParams = z.object({ id: uuid });
-const itemParams = z.object({ itemId: itemIdSchema });
+const itemParams = z.object({ itemId: cuid });
 const groupFields = z.object({
   type: z.enum(["VARIANT", "ADD_ON"]),
   name: z.string().trim().min(1).max(100),

@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { categoryIdSchema } from './catalog-id.js';
 
 export const createCategorySchema = z.object({
   name: z.string().min(1).max(120),
@@ -14,10 +13,10 @@ export const createCategorySchema = z.object({
 export const updateCategorySchema = createCategorySchema.partial();
 
 export const reorderSchema = z.object({
-  order: z.array(z.object({ id: categoryIdSchema, sortOrder: z.number().int() })).min(1),
+  order: z.array(z.object({ id: z.string().cuid(), sortOrder: z.number().int() })).min(1),
 });
 
-export const idParamSchema = z.object({ id: categoryIdSchema });
+export const idParamSchema = z.object({ id: z.string().cuid() });
 
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;

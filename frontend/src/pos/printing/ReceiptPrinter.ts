@@ -30,12 +30,12 @@ export interface ReceiptPrinter {
 }
 
 const CSS_PIXELS_PER_MM = 96 / 25.4;
-const RECEIPT_BOTTOM_FEED_MM = 35;
-const RECEIPT_PAGE_SAFETY_MM = 10;
+const RECEIPT_BOTTOM_FEED_MM = 6;
+const RECEIPT_PAGE_SAFETY_MM = 2;
 
 export function calculateReceiptPageHeightMm(contentHeightPx: number) {
   return Math.max(
-    60,
+    30,
     Math.ceil(contentHeightPx / CSS_PIXELS_PER_MM + RECEIPT_PAGE_SAFETY_MM),
   );
 }
@@ -201,8 +201,6 @@ export class BrowserReceiptPrinter implements ReceiptPrinter {
       const heightPx = calculateReceiptDocumentHeightPx(
         receipt.scrollHeight,
         Math.ceil(receipt.getBoundingClientRect().height),
-        popup.document.body.scrollHeight,
-        popup.document.documentElement.scrollHeight,
       );
       const heightMm = calculateReceiptPageHeightMm(heightPx);
       pageStyle.textContent = `@page{size:${profile} ${heightMm}mm;margin:0}`;

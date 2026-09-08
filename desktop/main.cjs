@@ -442,11 +442,11 @@ async function printHtml({ html, profile = "80mm", jobId, isReprint = false, aut
     await receiptWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
     await receiptWindow.webContents.executeJavaScript("document.fonts?.ready", true);
     const heightPx = await receiptWindow.webContents.executeJavaScript(
-      `Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, document.querySelector('.receipt')?.scrollHeight || 0)`,
+      `(() => { const receipt = document.querySelector('.receipt'); if (!receipt) throw new Error('RECEIPT_CONTENT_MISSING'); return Math.max(receipt.scrollHeight, Math.ceil(receipt.getBoundingClientRect().height)); })()`,
       true,
     );
     const widthMicrons = effectiveProfile === "58mm" ? 58_000 : 80_000;
-    const heightMicrons = Math.min(3_276_000, Math.max(60_000, Math.ceil((Number(heightPx) / 96) * 25_400) + 4_000));
+    const heightMicrons = Math.min(3_276_000, Math.max(30_000, Math.ceil((Number(heightPx) / 96) * 25_400) + 2_000));
 
     await printWindowContents(receiptWindow, {
       silent: true,

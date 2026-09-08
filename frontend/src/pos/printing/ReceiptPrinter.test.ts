@@ -113,14 +113,14 @@ describe("receipt renderer", () => {
       expect(html).toContain("overflow-wrap:anywhere");
       expect(html).toContain("break-inside:avoid");
       expect(html).toContain('class="paper-feed"');
-      expect(html).toContain("height:35mm");
+      expect(html).toContain("height:6mm");
       expect(html).not.toContain(".payment{break-inside:avoid");
     },
   );
 
   it("adds a safe paper-feed buffer to the measured receipt height", () => {
-    expect(calculateReceiptPageHeightMm(0)).toBe(60);
-    expect(calculateReceiptPageHeightMm((96 / 25.4) * 100)).toBe(110);
+    expect(calculateReceiptPageHeightMm(0)).toBe(30);
+    expect(calculateReceiptPageHeightMm((96 / 25.4) * 100)).toBe(102);
   });
 
   it("uses the tallest rendered document measurement", () => {
